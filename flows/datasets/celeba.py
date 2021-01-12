@@ -4,16 +4,101 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+class EncodedCelebA(Dataset):
+    """
+    encodings of entire celebA dataset
+    """
+    def __init__(self, root,
+                 split='train'):
+        self.data_dir = os.path.join(root, f'{split}_encodings')
+        self.labels = torch.load(os.path.join(root, f'{split}_encodings_labels.pt'))
+
+    def __getitem__(self, index):
+        x = torch.load(os.path.join(self.data_dir, f'{index + 1}.pt'))
+        target = self.labels[index]
+
+        return (x, target)
+    
+    def __len__(self):
+        return len(self.labels)
+
+
+class SplitEncodedCelebA(Dataset):
+    """ 
+    dataset that returns (ref_x, biased_x) when iterated through via dataloader
+    (need to specify targets upon dataloading)
+    """
+    def __init__(self, root,
+                 config,
+                 split='train'):
+
+        self.ref_split = config.classifier.ref_split
+        self.biased_split = config.classifier.biased_split
+        self.perc = config.classifier.perc
+        # the class we're using to split the data (e.g., male/female):
+        self.class_idx = config.classifier.cls_idx
+
+        self.encoded_data = EncodedCelebA(root, split=split)
+        self.labels = self.encoded_data.labels # attr labels
+
+        # create ref/biased dataset based on given splits/perc
+        self.biased_dset = self._get_split_dataset(self.biased_split, is_biased=True, perc=self.perc)
+        self.ref_dset = self._get_split_dataset(self.ref_split, is_biased=False)
+
+    def  _get_split_dataset(self, split, is_biased=True, perc=1.0):
+        """
+        Returns LoopingDataset of data according to split/perc
+        """
+        class1_indices = np.flatnonzero(self.labels[:, self.class_idx]==0)
+        class2_indices = np.flatnonzero(self.labels[:, self.class_idx]==1)
+        n_class1_total = len(class1_indices)
+        n_class2_total = len(class2_indices)
+        n_samples_total = len(self.encoded_data)
+
+        # Determine the  number of each class needed; unless we have a
+        # desired split that is exactly the same as the original dataset, 
+        # we will need to leave out some samples
+        if is_biased:
+            if int(split * n_samples_total) >= n_class1_total:
+                n_class1 = n_class1_total
+                n_class2 = int(n_class1 // split) - n_class1
+            else:
+                n_class2 = n_class2_total
+                n_class1 = int(n_class2 // split) - n_class2
+        else:
+            n_samples_needed = int(perc * len(self.biased_dset))
+            if int(split * n_samples_needed) >= int(perc * n_class1_total):
+                n_class1 = int(perc * n_class1_total)
+                n_class2 = int(n_class1 // split) - n_class1
+            else:
+                n_class2 = int(perc * n_class2_total)
+                n_class1 = int(n_class2 // split) - n_class2
+
+
+        indices = np.append(class1_indices[:n_class1],class2_indices[:n_class2])
+
+        # Subset creates a subset of encoded_data with specified indices
+        # LoopingDataset handles situation where len(self.ref_dset) != len(self.biased_dset)
+        return LoopingDataset(Subset(self.encoded_data, indices))
+    
+    def __getitem__(self, index):
+        ref_x, _ = self.ref_dset[index]
+        biased_x, _ = self.biased_dset[index]
+
+        return (ref_x, biased_x)
+    
+    def __len__(self):
+        return len(self.ref_dset) + len(self.biased_dset)
 
 class CelebA(Dataset):
     processed_file = 'processed.pt'
-    partition_file = 'Eval/list_eval_partition.txt'
-    attr_file = 'Anno/list_attr_celeba.txt'
-    img_folder = 'Img/img_align_celeba'
+    partition_file = 'list_eval_partition.txt'
+    attr_file = 'list_attr_celeba.txt'
+    img_folder = 'img_align_celeba'
     attr_names = '5_o_Clock_Shadow Arched_Eyebrows Attractive Bags_Under_Eyes Bald Bangs Big_Lips Big_Nose Black_Hair Blond_Hair Blurry Brown_Hair Bushy_Eyebrows Chubby Double_Chin Eyeglasses Goatee Gray_Hair Heavy_Makeup High_Cheekbones Male Mouth_Slightly_Open Mustache Narrow_Eyes No_Beard Oval_Face Pale_Skin Pointy_Nose Receding_Hairline Rosy_Cheeks Sideburns Smiling Straight_Hair Wavy_Hair Wearing_Earrings Wearing_Hat Wearing_Lipstick Wearing_Necklace Wearing_Necktie Young'.split()
 
     def __init__(self, root, train=True, transform=None, mini_data_size=None):
-        self.root = os.path.join(os.path.expanduser(root), self.__class__.__name__)
+        self.root = os.path.join(os.path.expanduser(root), 'celeba')
         self.transform = transform
 
         # check if processed

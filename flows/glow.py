@@ -29,7 +29,9 @@ parser = argparse.ArgumentParser()
 # action
 parser.add_argument('--train', action='store_true', help='Train a flow.')
 parser.add_argument('--evaluate', action='store_true', help='Evaluate a flow.')
+parser.add_argument('--encode', action='store_true', help='Save data z-encodings using a trained model.')
 parser.add_argument('--generate', action='store_true', help='Generate samples from a model.')
+parser.add_argument('--fair-generate', action='store_true', help='Generate samples from a model using importance weights.')
 parser.add_argument('--visualize', action='store_true', help='Visualize manipulated attribures.')
 parser.add_argument('--restore_file', type=str, help='Path to model to restore.')
 parser.add_argument('--seed', type=int, help='Random seed to use.')
@@ -66,7 +68,6 @@ parser.add_argument('--local_rank', type=int, help='When provided, run model on 
 parser.add_argument('--vis_img', type=str, help='Path to image file to manipulate attributes and visualize.')
 parser.add_argument('--vis_attrs', nargs='+', type=int, help='Which attribute to manipulate.')
 parser.add_argument('--vis_alphas', nargs='+', type=float, help='Step size on the manipulation direction.')
-
 
 best_eval_logprob = float('-inf')
 
@@ -479,9 +480,13 @@ def train_epoch(model, dataloader, optimizer, writer, epoch, args):
         # warmup learning rate
         if epoch <= args.n_epochs_warmup:
             optimizer.param_groups[0]['lr'] = args.lr * min(1, args.step / (len(dataloader) * args.world_size * args.n_epochs_warmup))
-
+        
+        # print('device: ', args.device)
+        print('path: ', os.path.splitext(__file__)[0])
+        print('output_dir: ', args.output_dir)
         x = x.requires_grad_(True if args.checkpoint_grads else False).to(args.device)  # requires_grad needed for checkpointing
 
+        # print('reached iteration', i)
         loss = - model.log_prob(x, bits_per_pixel=True).mean(0)
 
         optimizer.zero_grad()
@@ -573,6 +578,40 @@ def train_and_evaluate(model, train_dataloader, test_dataloader, optimizer, writ
                             'global_step': args.step,
                             'state_dict': model.state_dict()},
                             os.path.join(args.output_dir, 'best_model_checkpoint.pt'))
+
+
+
+def save_encodings(model, train_loader, test_loader, data_dir, dataset):
+    '''
+    Given trained model, save train and test encodings of dataset
+    '''
+    from copy import deepcopy
+
+    model.eval()
+
+    ys = []
+    idx = 1
+    save_folder = os.path.join(data_dir, f'encoded_{dataset}')
+    os.makedirs(save_folder, exist_ok=True)
+    for split, loader in zip(('train', 'test'), (train_loader, test_loader)):
+        for i, (x,y) in enumerate(loader):
+            if i == 20:
+                print(f'encoded {split}!')
+                break
+            # if i % 100 == 0:
+            #     print(f'Encoding batch [{i+1}/{len(dataloader)}]')
+            x = x.to(args.device)
+            zs, _ = model(x)
+            for z in zs:
+                save_path = os.path.join(save_folder, f'{split}_encodings', f'{idx}.pt')
+                torch.save(z, save_path)
+                idx += 1
+            ys.append(deepcopy(y))
+    
+        save_path = os.path.join(save_folder, f'{split}_encodings_labels.pt')
+        ys = torch.cat(ys, dim=0)
+        torch.save(ys, save_path)
+        print(f'Encoding of {dataset} {split} set completed.')
 
 
 # --------------------
@@ -756,6 +795,9 @@ if __name__ == '__main__':
         save_image(images, os.path.join(args.output_dir,
                                         'generated_samples_at_z_std_{}.png'.format('range' if args.z_std is None else args.z_std)))
 
+    if args.encode:
+        assert args.restore_file is not None, "Must specify --restore_file to encode dataset."
+        save_encodings(model, train_dataloader, test_dataloader, args.data_dir, args.dataset)
     if args.visualize:
         if not args.z_std: args.z_std = 0.6
         if not args.vis_alphas: args.vis_alphas = [-2,-1,0,1,2]
