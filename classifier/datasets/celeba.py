@@ -11,13 +11,16 @@ class EncodedCelebA(Dataset):
     """
     def __init__(self, args, split='train'):
         self.args = args
-        self.zs = np.load(os.path.join(args.data_dir, args.z_file))
-        self.labels = np.load(os.path.join(args.data_dir, args.attr_file))
+        # assumes data has been cached by split
+        print('loading in zs and labels from numpy...(split={})'.format(split))
+        record = np.load(os.path.join(args.data_dir, '{}_z.npz'.format(split)))
+        self.zs = record['z']
+        self.labels = record['y']
         
         print('loaded!')
-        start, end = self.get_data_idxs(split)
-        self.zs = self.zs[start:end]
-        self.labels = self.labels[start:end]
+        # start, end = self.get_data_idxs(split)
+        # self.zs = self.zs[start:end]
+        # self.labels = self.labels[start:end]
         
     def get_data_idxs(self, split):
         if split == 'train':

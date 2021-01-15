@@ -18,7 +18,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     
     # data
-    parser.add_argument('--data_dir', type=str, default='/atlas/u/madeline/multi-fairgen/data', help='path to data')
+    parser.add_argument('--data_dir', type=str, default='/atlas/u/kechoi/multi-fairgen/data', help='path to data')
     parser.add_argument('--z_file', type=str, default='z.npy', help='z encoding filename')
     parser.add_argument('--attr_file', type=str, default='attr.npy', help='attr filename')
     parser.add_argument('--class_idx', type=int, default=20, help='class index of attribute to split dataset by')
@@ -33,11 +33,12 @@ def parse_args():
     parser.add_argument('--h_dim', type=int, default=500, help='size of hidden layer')
     parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
     parser.add_argument('--n_epochs', type=int, default=10, help='num epochs')
-    parser.add_argument('--batch_size', type=int, default=128, help='batch size')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+    parser.add_argument('--num_epochs', type=int, default=20, help='number of training epochs')
     
     # saving
-    parser.add_argument('--out_dir', type=str, default='/atlas/u/madeline/multi-fairgen/classifier/results')
+    parser.add_argument('--out_dir', type=str, default='/atlas/u/kechoi/multi-fairgen/classifier/results')
     
     parser.add_argument('--num_workers', type=int, default=4, help='num workers for dataloader')
     
@@ -63,7 +64,7 @@ def train(args):
         shuffle=False)
     
     model = MLPClassifier(args).to(args.device)
-    model = torch.n.DataParallel(model)
+    model = torch.nn.DataParallel(model)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     
@@ -80,23 +81,17 @@ def train(args):
 
         for z_ref, z_biased in train_loader:
             z = torch.cat([z_ref, z_biased])
-            y = torch.cat(
-                torch.ones(z_ref.shape[0]),
-                torch.zeros(z_biased.shape[0])
-            )
+            y = torch.cat([torch.ones(z_ref.shape[0]), torch.zeros(z_biased.shape[0])])
 
             # random permutation of data
             idx = torch.randperm(len(z))
-            z = z[idx].to(args.device)
-            y = y[idx].to(args.device)
-
-            # x = x.to(self.device).float()
-            # y = y.to(self.device).long()
+            z = z[idx].to(args.device).view(len(idx), -1)
+            y = y[idx].to(args.device).long()
             
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = model(z)
             loss = F.cross_entropy(logits, y)         
-            avg_loss_meter.update(loss)
+            avg_loss_meter.update(loss.item())
 
             optimizer.zero_grad()
             loss.backward()
@@ -104,7 +99,7 @@ def train(args):
         
         train_losses.append(avg_loss_meter.avg)
         # checkpoint by best validation loss
-        val_loss, val_labels, val_probs, val_ratios = evaluate(model, val_loader, 'val')
+        val_loss, val_labels, val_probs, val_ratios = evaluate(args, model, val_loader, 'val')
 
         if val_loss < best_loss:
             best_loss = val_loss
@@ -115,9 +110,9 @@ def train(args):
             ]
 
         # evaluation
-        test_loss, test_labels, test_probs, test_ratios = evaluate(model, test_loader, 'test')
-        clf_diagnostics(val_labels, val_probs, val_ratios)
-        clf_diagnostics(test_labels, test_probs, test_ratios)
+        test_loss, test_labels, test_probs, test_ratios = evaluate(args, model, test_loader, 'test')
+        clf_diagnostics(args, val_labels, val_probs, val_ratios)
+        clf_diagnostics(args, test_labels, test_probs, test_ratios)
 
         val_losses.append(val_loss)
         test_losses.append(test_loss)
@@ -140,16 +135,16 @@ def evaluate(args, model, loader, split):
     with torch.no_grad():
         for (z_ref, z_biased) in loader:
             z = torch.cat([z_ref, z_biased])
-            y = torch.cat(
+            y = torch.cat([
                 torch.ones(z_ref.shape[0]),
                 torch.zeros(z_biased.shape[0])
-            )
+            ])
             
-            z = z.to(args.device)
-            y = y.to(args.device)
+            z = z.to(args.device).view(len(z), -1)
+            y = y.to(args.device).long()
 
             logits, probs = model(z)
-            loss += F.cross_entropy(logits, y, reduction='sum')        
+            loss += F.cross_entropy(logits, y, reduction='sum').item()
             _, pred = torch.max(probs, 1)
             num_examples += y.size(0)
             correct += (pred == y).sum()
@@ -173,7 +168,7 @@ def evaluate(args, model, loader, split):
     return loss, labels, p_y1, ratios
     
 
-def clf_diagnostics(self, y_valid, valid_prob_pos, ratios):
+def clf_diagnostics(args, y_valid, valid_prob_pos, ratios):
         """
         function to check (1) classifier calibration; and (2) save weights
         """
@@ -181,8 +176,8 @@ def clf_diagnostics(self, y_valid, valid_prob_pos, ratios):
         fraction_of_positives, mean_predicted_value = calibration_curve(y_valid, valid_prob_pos[:, 1])
 
         # save calibration results
-        np.save(os.path.join(self.args.log_path, 'fraction_of_positives'), fraction_of_positives)
-        np.save(os.path.join(self.args.log_path, 'mean_predicted_value.npy'), mean_predicted_value)
+        np.save(os.path.join(args.out_dir, 'fraction_of_positives'), fraction_of_positives)
+        np.save(os.path.join(args.out_dir, 'mean_predicted_value.npy'), mean_predicted_value)
 
         # obtain figure
         plt.figure(figsize=(10,5))
@@ -194,11 +189,11 @@ def clf_diagnostics(self, y_valid, valid_prob_pos, ratios):
         plt.tick_params(axis='both', which='major', labelsize=20)
         plt.tick_params(axis='both', which='minor', labelsize=20)
         plt.legend()
-        plt.savefig(os.path.join(self.args.log_path, 'calibration_curve.pdf'))
+        plt.savefig(os.path.join(args.out_dir, 'calibration_curve.pdf'))
 
         # save density ratios
         np.savez(
-            os.path.join(self.args.log_path, 'ratios.npz'), **{'x': ratios})
+            os.path.join(args.out_dir, 'ratios.npz'), **{'x': ratios})
 
 if __name__ == '__main__':
     args = parse_args()
