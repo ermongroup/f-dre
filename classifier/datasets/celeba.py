@@ -11,12 +11,13 @@ class EncodedCelebA(Dataset):
     """
     def __init__(self, args, split='train'):
         self.args = args
-        zs = torch.load(os.path.join(args.data_dir, args.z_file))
-        labels = torch.load(os.path.join(args.data_dir, args.attr_file))
+        self.zs = np.load(os.path.join(args.data_dir, args.z_file))
+        self.labels = np.load(os.path.join(args.data_dir, args.attr_file))
         
+        print('loaded!')
         start, end = self.get_data_idxs(split)
-        self.zs = zs[start:end]
-        self.labels = labels[start:end]
+        self.zs = self.zs[start:end]
+        self.labels = self.labels[start:end]
         
     def get_data_idxs(self, split):
         if split == 'train':
@@ -63,11 +64,14 @@ class SplitEncodedCelebA(Dataset):
         """
         Returns LoopingDataset of data according to split/perc
         """
-        class1_indices = np.flatnonzero(self.labels[:, self.class_idx]==0)
+        class1_indices = np.flatnonzero(self.labels[:, self.class_idx]==-1)
         class2_indices = np.flatnonzero(self.labels[:, self.class_idx]==1)
         n_class1_total = len(class1_indices)
         n_class2_total = len(class2_indices)
         n_samples_total = len(self.encoded_data)
+        print('n_class1_total: ', n_class1_total)
+        print('n_class2_total: ', n_class2_total)
+        print('n_samples_total: ', n_samples_total)
 
         # Determine the  number of each class needed; unless we have a
         # desired split that is exactly the same as the original dataset, 
@@ -103,6 +107,7 @@ class SplitEncodedCelebA(Dataset):
         return (ref_z, biased_z)
     
     def __len__(self):
+        print('len: ', len(self.ref_dset) + len(self.biased_dset))
         return len(self.ref_dset) + len(self.biased_dset)
 
 class CelebA(Dataset):

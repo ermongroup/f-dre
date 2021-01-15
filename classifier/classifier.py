@@ -7,13 +7,13 @@ class MLPClassifier(nn.Module):
   """
   simple MLP classifier (e.g. for classifying in z-space)
   """
-  def __init__(self, config):
+  def __init__(self, args):
       super(MLPClassifier, self).__init__()
-      self.config = config
-      self.h_dim = config.classifier.h_dim
-      self.n_classes = config.classifier.n_classes
-      self.in_dim = config.classifier.pixels
-      self.dropout = nn.Dropout(config.classifier.dropout)
+      self.args = args
+      self.h_dim = args.h_dim
+      self.n_classes = args.n_classes
+      self.in_dim = args.pixels
+      self.dropout = nn.Dropout(args.dropout)
       self.bn = nn.BatchNorm1d(self.h_dim)
 
       # TODO: don't hardcode to celeba
