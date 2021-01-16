@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=0 python maf.py --train --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf' --model='maf' --dataset='MNIST_combined' --hidden_size=1024

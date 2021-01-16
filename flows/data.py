@@ -7,6 +7,10 @@ import torchvision.transforms as T
 from torch.utils.data import DataLoader, TensorDataset
 
 import datasets
+from datasets.cmnist import (
+    ourMNIST,
+    FlippedMNIST
+)
 
 # --------------------
 # Helper functions
@@ -64,36 +68,20 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, flip_toy_var_order
         lam = dataset.alpha
 
     elif dataset_name in ['MNIST_combined']:
-        mnist = load_dataset('MNIST')(rgb=True)
-        
-        # join train and val data again
-        mnist_train_x = np.concatenate((mnist.trn.x, mnist.val.x), axis=0).astype(np.float32)
-        mnist_train_y = np.concatenate((mnist.trn.y, mnist.val.y), axis=0).astype(np.float32)
-
-        # construct datasets
-        mnist_train = TensorDataset(torch.from_numpy(mnist_train_x), torch.from_numpy(mnist_train_y))
-        mnist_test  = TensorDataset(torch.from_numpy(mnist.tst.x.astype(np.float32)),
-                                      torch.from_numpy(mnist.tst.y.astype(np.float32)))
+        train_mnist = ourMNIST(args, split='train')
+        test_mnist = ourMNIST(args, split='test')
 
         #TODO: CMNIST load_dataset
-        train_cmnist = load_dataset('CMNIST')(args, split='train')
-        val_cmnist = load_dataset('CMNIST')(args, split='val')
-        test_cmnist = load_dataset('CMNIST')(args, split='test')
+        train_cmnist = FlippedMNIST(args, split='train')
+        test_cmnist = FlippedMNIST(args, split='test')
 
-        # join train and val data again
-        cmnist_train_x = np.concatenate((train_cmnist.data, val_cmnist.data), axis=0).astype(np.float32)
-        cmnist_train_y = np.concatenate((train_cmnist.labels, val_cmnist.labels), axis=0).astype(np.float32)
-
-        # construct datasets
-        cmnist_train = TensorDataset(torch.from_numpy(cmnist_train_x), torch.from_numpy(cmnist_train_y))
-        cmnist_test = TensorDataset(test_cmnist.data, test_cmnist.labels)
-
-        train_dataset = ConcatDataset([mnist_train, cmnist_train])
-        test_dataset = ConcatDataset([mnist_test, cmnist_test])
+        # will you want to see a little bit of each example in each batch?
+        train_dataset = ConcatDataset([train_mnist, train_cmnist])
+        test_dataset = ConcatDataset([test_mnist, test_cmnist])
         
-        input_dims = mnist.n_dims
+        input_dims = 784
         label_size = 10
-        lam = mnist.alpha
+        lam = 1e-6
 
     elif dataset_name in ['TOY', 'MOONS']:  # use own constructors
         train_dataset = load_dataset(dataset_name)(toy_train_size, flip_toy_var_order)

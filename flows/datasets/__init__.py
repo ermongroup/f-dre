@@ -1,4 +1,4 @@
-root = '/atlas/u/madeline/multi-fairgen/data'
+root = '/atlas/u/kechoi/multi-fairgen/data'
 
 # from .power import POWER
 # from .gas import GAS
