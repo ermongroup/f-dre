@@ -18,23 +18,6 @@ class EncodedCelebA(Dataset):
         self.labels = record['y']
         
         print('loaded!')
-        # start, end = self.get_data_idxs(split)
-        # self.zs = self.zs[start:end]
-        # self.labels = self.labels[start:end]
-        
-    def get_data_idxs(self, split):
-        if split == 'train':
-            start = 0 
-            end = int(len(self.zs) * self.args.train_perc)
-        elif split == 'test':
-            start = int(len(self.zs) * self.args.train_perc)
-            end = start + int(self.args.test_perc * len(self.zs))
-        else: # split == 'val'
-            test_start = int(len(self.zs) * self.args.train_perc)
-            start =  test_start + int(self.args.test_perc * len(self.zs))
-            end = len(self.zs)
-        
-        return start, end
 
     def __getitem__(self, index):
         return (self.zs[index], self.labels[index])
@@ -110,7 +93,6 @@ class SplitEncodedCelebA(Dataset):
         return (ref_z, biased_z)
     
     def __len__(self):
-        print('len: ', len(self.ref_dset) + len(self.biased_dset))
         return len(self.ref_dset) + len(self.biased_dset)
 
 class CelebA(Dataset):

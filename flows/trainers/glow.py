@@ -246,9 +246,6 @@ def save_encodings(model, train_loader, test_loader, data_dir, dataset):
     os.makedirs(save_folder, exist_ok=True)
     for split, loader in zip(('train', 'test'), (train_loader, test_loader)):
         for i, (x,y) in enumerate(loader):
-            if i == 20:
-                print(f'encoded {split}!')
-                break
             # if i % 100 == 0:
             #     print(f'Encoding batch [{i+1}/{len(dataloader)}]')
             x = x.to(args.device)
@@ -399,7 +396,7 @@ if __name__ == '__main__':
         # for compatibility of saving/loading models, wrap non-distributed cpu/gpu model as well;
         # ie state dict is based on model.module.layer keys, which now match between training distributed and running then locally
         model = torch.nn.parallel.DataParallel(model)
-    # DataParalle and DistributedDataParallel are wrappers around the model; expose functions of the model directly
+    # DataParallel and DistributedDataParallel are wrappers around the model; expose functions of the model directly
     model.base_dist = model.module.base_dist
     model.log_prob = model.module.log_prob
     model.inverse = model.module.inverse

@@ -2,6 +2,7 @@ import numpy as np
 import gzip
 import pickle
 import matplotlib.pyplot as plt
+import os
 
 import datasets
 import datasets.util as util
@@ -19,10 +20,12 @@ class MNIST:
         Constructs the dataset.
         """
 
-        def __init__(self, data, logit, dequantize, rng):
+        def __init__(self, data, logit, dequantize, rng, rgb):
 
             x = self._dequantize(data[0], rng) if dequantize else data[0]  # dequantize pixels
             self.x = self._logit_transform(x) if logit else x              # logit
+            if rgb:
+                self.x = np.stack([self.x, self.x, self.x], axis=1)
             self.labels = data[1]                                          # numeric labels
             self.y = util.one_hot_encode(self.labels, 10)                  # 1-hot encoded labels
             self.N = self.x.shape[0]                                       # number of datapoints
@@ -41,20 +44,21 @@ class MNIST:
             """
             return util.logit(MNIST.alpha + (1 - 2*MNIST.alpha) * x)
 
-    def __init__(self, logit=True, dequantize=True):
+    def __init__(self, logit=True, dequantize=True, rgb=False):
 
         # load dataset
-        f = gzip.open(datasets.root + 'uci_mnist/mnist.pkl.gz', 'rb')
+        f = gzip.open(os.path.join(datasets.root, 'mnist/mnist.pkl.gz'), 'rb')
         trn, val, tst = pickle.load(f, encoding='latin1')
         f.close()
 
         rng = np.random.RandomState(42)
-        self.trn = self.Data(trn, logit, dequantize, rng)
-        self.val = self.Data(val, logit, dequantize, rng)
-        self.tst = self.Data(tst, logit, dequantize, rng)
+        self.trn = self.Data(trn, logit, dequantize, rng, rgb)
+        self.val = self.Data(val, logit, dequantize, rng, rgb)
+        self.tst = self.Data(tst, logit, dequantize, rng, rgb)
 
-        im_dim = int(np.sqrt(self.trn.x.shape[1]))
-        self.n_dims = (1, im_dim, im_dim)
+        im_dim_idx = 2 if rgb else 1
+        im_dim = int(np.sqrt(self.trn.x.shape[im_dim_idx]))
+        self.n_dims = (3, im_dim, im_dim) if rgb else (1, im_dim, im_dim)
         self.n_labels = self.trn.y.shape[1]
         self.image_size = [im_dim, im_dim]
 
