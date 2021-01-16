@@ -68,24 +68,26 @@ class CMNIST(VisionDataset):
 
         blue_idx = np.random.choice(np.arange(num_samples), size=num_blue, replace=False)
         yellow_idx = np.setdiff1d(np.arange(num_samples), blue_idx)
-        # y = 0
-        # idx = torch.where(self.og_y < 5)[0]
+
+
         dset.append(torch.Tensor(self.og_data[blue_idx]))
         labels.append(torch.Tensor(self.og_y[blue_idx]))
 
-        # y = 1
-        # idx = torch.where(self.og_y >= 5)[0]
         dset.append(torch.Tensor(self.og_data[yellow_idx]))
         labels.append(torch.Tensor(self.og_y[yellow_idx]))
 
         dset = torch.cat(dset)
-        dset = torch.stack([dset, dset, dset], dim=1)
-        dset = torch.reshape(dset, (-1, 3, 28, 28))  # (n, 3, 28, 28)
+        dset = torch.reshape(dset, (-1, 28, 28))  
+        dset = torch.stack([dset, dset, dset], dim=1) # (n, 3, 28, 28)
 
         labels = torch.cat(labels)
+
+        # recolor
+        dset = (255 - dset)
         dset[:num_blue, 0, :, :] = 12
         dset[num_blue:, 2, :, :] = 12
         
+        # this is the shape of the MAF implementation of MNIST
         dset = torch.reshape(dset, (-1, 3, 784))  # (n, 3, 784)
 
         return dset, labels
