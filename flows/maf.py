@@ -39,7 +39,9 @@ parser.add_argument('--results_file', default='results.txt', help='Filename wher
 parser.add_argument('--no_cuda', action='store_true', help='Do not use cuda.')
 # data
 parser.add_argument('--dataset', default='toy', help='Which dataset to use.')
-parser.add_argument('--perc', default=0.5, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
+parser.add_argument('--perc', type=float, default=0.5, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
+parser.add_argument('--digits', type=list, default=[0, 7], help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
+parser.add_argument('--digit_percs', type=list, default=[0.5, 0.5], help='Used with --digits; perc of each digit to include in dataset.')
 parser.add_argument('--flip_toy_var_order', action='store_true', help='Whether to flip the toy dataset variable order to (x2, x1).')
 parser.add_argument('--seed', type=int, default=1, help='Random seed to use.')
 # model
@@ -164,7 +166,7 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
     save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
 
-def save_encodings(model, train_loader, test_loader, model_name, data_dir, dataset):
+def save_encodings(model, train_loader, val_loader, test_loader, model_name, data_dir, dataset):
     import numpy as np
     from copy import deepcopy
     model = model.to(device)
@@ -172,12 +174,13 @@ def save_encodings(model, train_loader, test_loader, model_name, data_dir, datas
 
     # separate out regular mnist and flipped mnist
     train_mnist, train_cmnist = train_loader
+    val_mnist, val_cmnist = val_loader
     test_mnist, test_cmnist = test_loader
 
     save_folder = os.path.join(data_dir, dataset, f'{model_name}_encodings')
     os.makedirs(save_folder, exist_ok=True)
 
-    for split, loader in zip(('train', 'test'), (train_mnist, test_mnist)):
+    for split, loader in zip(('train', 'val', 'test'), (train_mnist, val_mnist, test_mnist)):
         save_path = os.path.join(data_dir, '{}_{}_mnist_z'.format(model_name, split))
         ys = []
         zs = []
@@ -194,7 +197,7 @@ def save_encodings(model, train_loader, test_loader, model_name, data_dir, datas
         np.savez(save_path, **{'z': zs, 'y': ys, 'd_y': d_ys})
         print(f'Encoding of mnist {split} set completed.')
 
-    for split, loader in zip(('train', 'test'), (train_cmnist, test_cmnist)):
+    for split, loader in zip(('train', 'val', 'test'), (train_cmnist, val_cmnist, test_cmnist)):
         save_path = os.path.join(data_dir, '{}_{}_cmnist_z'.format(model_name, split))
         ys = []
         zs = []
@@ -240,7 +243,7 @@ def train_and_evaluate(model, train_loader, test_loader, optimizer, args):
         # plot sample
         if args.dataset == 'TOY':
             plot_sample_and_density(model, train_loader.dataset.base_dist, args, step=i)
-        if args.dataset == 'MNIST' or args.dataset == 'MNIST_combined':
+        if args.dataset in ['MNIST', 'MNIST_combined', 'FlippedMNIST', 'MNISTSubset_combined']:
             generate(model, train_loader.dataset.lam, args, step=i)
 
 # --------------------
@@ -317,7 +320,7 @@ if __name__ == '__main__':
 
     # load data
     if args.conditional: assert args.dataset in ['MNIST', 'CIFAR10', 'MNIST_combined'], 'Conditional inputs only available for labeled datasets MNIST and CIFAR10.'
-    train_dataloader, test_dataloader = fetch_dataloaders(args.dataset, args.batch_size, device, args, args.flip_toy_var_order)
+    train_dataloader, val_dataloader, test_dataloader = fetch_dataloaders(args.dataset, args.batch_size, device, args, args.flip_toy_var_order)
     if args.dataset != 'MNIST_combined_z':
         args.input_size = train_dataloader.dataset.input_size
         args.input_dims = train_dataloader.dataset.input_dims
@@ -377,12 +380,12 @@ if __name__ == '__main__':
     if args.encode:
         assert args.restore_file is not None, "Must specify --restore_file to encode dataset."
         print('saving z-encodings from pretrained model...')
-        save_encodings(model, train_dataloader, test_dataloader, args.model, args.data_dir, args.dataset)
+        save_encodings(model, train_dataloader, val_dataloader, test_dataloader, args.model, args.data_dir, args.dataset)
     if args.generate:
         if args.dataset == 'TOY':
             base_dist = train_dataloader.dataset.base_dist
             plot_sample_and_density(model, base_dist, args, ranges_density=[[-15,4],[-3,3]], ranges_sample=[[-1.5,1.5],[-3,3]])
-        elif args.dataset == 'MNIST':
+        elif args.dataset == 'MNIST' or args.dataset == 'FlippedMNIST' or args.dataset == 'MNIST_combined':
             generate(model, train_dataloader.dataset.lam, args)
 
 

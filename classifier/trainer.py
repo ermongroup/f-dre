@@ -53,6 +53,11 @@ def train(args):
         batch_size=args.batch_size//2,
         shuffle=True)
 
+    val_loader = DataLoader(
+        SplitEncodedMNIST(args, split='val'),
+        batch_size=args.batch_size//2,
+        shuffle=False)
+
     test_loader = DataLoader(
         SplitEncodedMNIST(args, split='test'),
         batch_size=args.batch_size//2,
@@ -66,7 +71,7 @@ def train(args):
     best_loss = float('inf')
     best_state = []
 
-    train_losses, test_losses = [], []
+    train_losses, val_losses, test_losses = [], [], []
 
     print('beginning training...')
 
@@ -93,7 +98,7 @@ def train(args):
             optimizer.step()
         
         train_losses.append(avg_loss_meter.avg)
-        # checkpoint by best validation loss
+        # checkpoint by best test loss
         test_loss, test_labels, test_probs, test_ratios = evaluate(args, model, test_loader, 'test')
 
         if test_loss < best_loss:
@@ -105,14 +110,15 @@ def train(args):
             ]
 
         # evaluation
-        # test_loss, test_labels, test_probs, test_ratios = evaluate(args, model, test_loader, 'test')
-        # clf_diagnostics(args, val_labels, val_probs, val_ratios)
-        clf_diagnostics(args, test_labels, test_probs, test_ratios)
+        val_loss, val_labels, val_probs, val_ratios = evaluate(args, model, val_loader, 'val')
+        clf_diagnostics(args, val_labels, val_probs, val_ratios, split='val')
+        clf_diagnostics(args, test_labels, test_probs, test_ratios, split='test')
 
-        # val_losses.append(val_loss)
+        val_losses.append(val_loss)
         test_losses.append(test_loss)
 
     np.save(os.path.join(args.out_dir, 'train_losses.npy'), train_losses)
+    np.save(os.path.join(args.out_dir, 'val_losses.npy'), val_losses)
     np.save(os.path.join(args.out_dir, 'test_losses.npy'), test_losses)   
 
     torch.save(best_state, os.path.join(args.out_dir, 'clf_ckpt.pth'))
@@ -162,7 +168,7 @@ def evaluate(args, model, loader, split):
     return loss, labels, p_y1, ratios
     
 
-def clf_diagnostics(args, y_valid, valid_prob_pos, ratios):
+def clf_diagnostics(args, y_valid, valid_prob_pos, ratios, split):
         """
         function to check (1) classifier calibration; and (2) save weights
         """
@@ -170,24 +176,24 @@ def clf_diagnostics(args, y_valid, valid_prob_pos, ratios):
         fraction_of_positives, mean_predicted_value = calibration_curve(y_valid, valid_prob_pos[:, 1])
 
         # save calibration results
-        np.save(os.path.join(args.out_dir, 'fraction_of_positives'), fraction_of_positives)
-        np.save(os.path.join(args.out_dir, 'mean_predicted_value.npy'), mean_predicted_value)
+        np.save(os.path.join(args.out_dir, f'{split}_fraction_of_positives'), fraction_of_positives)
+        np.save(os.path.join(args.out_dir, f'{split}_mean_predicted_value.npy'), mean_predicted_value)
 
         # obtain figure
         plt.figure(figsize=(10,5))
         plt.plot(mean_predicted_value, fraction_of_positives, "s-", label='dset_clf')
         plt.plot([0, 1], [0, 1], "k:", label="Perfectly calibrated")
 
-        plt.title('Validation Set: Calibration Curve',fontsize=22)
+        plt.title(f'{str.title(split)} Set: Calibration Curve',fontsize=22)
         plt.ylabel('Fraction of positives',fontsize=22)
         plt.tick_params(axis='both', which='major', labelsize=20)
         plt.tick_params(axis='both', which='minor', labelsize=20)
         plt.legend()
-        plt.savefig(os.path.join(args.out_dir, 'calibration_curve.pdf'))
+        plt.savefig(os.path.join(args.out_dir, f'{split}_calibration_curve.pdf'))
 
         # save density ratios
         np.savez(
-            os.path.join(args.out_dir, 'ratios.npz'), **{'ratios': ratios, 'd_labels': y_valid})
+            os.path.join(args.out_dir, f'{split}_ratios.npz'), **{'ratios': ratios, 'd_labels': y_valid})
 
 if __name__ == '__main__':
     args = parse_args()

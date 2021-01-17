@@ -15,8 +15,8 @@ class SplitEncodedMNIST(Dataset):
 
         self.args = args
         self.perc = args.perc
-        self.biased_dset = self.load_dataset(split, 'mnist')
         self.ref_dset = self.load_dataset(split, 'cmnist')
+        self.biased_dset = self.load_dataset(split, 'mnist')
 
     def load_dataset(self, split, variant='mnist'):
         record = np.load(os.path.join(self.args.data_dir, 'maf_{}_{}_z.npz'.format(split, variant)))
@@ -24,10 +24,11 @@ class SplitEncodedMNIST(Dataset):
         ys = record['y']
         d_ys = torch.from_numpy(record['d_y']).float()
 
-        # HACK for calibration
-        if split == 'test' and variant == 'mnist':
-            zs = zs[0:5000]
-            d_ys = d_ys[0:5000]
+        # Truncate biased test/val set to be same size as reference val/test sets
+        if (split == 'test' or split == 'val') and variant == 'mnist':
+            # len(self.ref_dset) is always <= len(self.biased_dset)
+            zs = zs[:len(self.ref_dset)]
+            d_ys = d_ys[:len(self.ref_dset)]
         dataset = TensorDataset(zs, d_ys)
         dataset = LoopingDataset(dataset)
         return dataset

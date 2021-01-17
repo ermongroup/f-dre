@@ -9,7 +9,9 @@ from torch.utils.data import DataLoader, TensorDataset
 import datasets
 from datasets.cmnist import (
     ourMNIST,
-    FlippedMNIST
+    FlippedMNIST,
+    FlippedMNISTSubset, 
+    MNISTSubset
 )
 
 # --------------------
@@ -35,7 +37,7 @@ def load_dataset(name):
 # --------------------
 
 def fetch_dataloaders(dataset_name, batch_size, device, args, flip_toy_var_order=False, toy_train_size=25000, toy_test_size=5000):
-
+    val_dataset = None
     # grab datasets
     if dataset_name in ['GAS', 'POWER', 'HEPMASS', 'MINIBOONE', 'BSDS300']:  # use the constructors by MAF authors
         dataset = load_dataset(dataset_name)()
@@ -67,16 +69,51 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, flip_toy_var_order
         label_size = 10
         lam = dataset.alpha
 
+    elif dataset_name in ['ourMNIST']:
+        train_dataset = ourMNIST(args, split='train')
+        val_dataset = ourMNIST(args, split='val')
+        test_dataset = ourMNIST(args, split='test')
+
+        input_dims = 784
+        label_size = 10
+        lam = 1e-6
     elif dataset_name in ['MNIST_combined']:
         train_mnist = ourMNIST(args, split='train')
+        val_mnist = ourMNIST(args, split='val')
         test_mnist = ourMNIST(args, split='test')
 
         #TODO: CMNIST load_dataset
         train_cmnist = FlippedMNIST(args, split='train')
+        val_cmnist = FlippedMNIST(args, split='val')
         test_cmnist = FlippedMNIST(args, split='test')
 
         # will you want to see a little bit of each example in each batch?
         train_dataset = ConcatDataset([train_mnist, train_cmnist])
+        val_dataset = ConcatDataset([val_mnist, val_cmnist])
+        test_dataset = ConcatDataset([test_mnist, test_cmnist])
+        
+        input_dims = 784
+        label_size = 10
+        lam = 1e-6
+    elif dataset_name in ['FlippedMNIST']:
+        train_dataset = FlippedMNIST(args, split='train')
+        val_dataset = FlippedMNIST(args, split='val')
+        test_dataset = FlippedMNIST(args, split='test')
+        input_dims = 784
+        label_size = 10
+        lam = 1e-6
+
+    elif dataset_name in ['MNISTSubset_combined']:
+        train_mnist = MNISTSubset(args, split='train')
+        val_mnist = MNISTSubset(args, split='val')
+        test_mnist = MNISTSubset(args, split='test')
+
+        train_cmnist = FlippedMNISTSubset(args, split='train')
+        val_cmnist = FlippedMNISTSubset(args, split='val')
+        test_cmnist = FlippedMNISTSubset(args, split='test')
+
+        train_dataset = ConcatDataset([train_mnist, train_cmnist])
+        val_dataset = ConcatDataset([val_mnist, val_cmnist])
         test_dataset = ConcatDataset([test_mnist, test_cmnist])
         
         input_dims = 784
@@ -89,6 +126,7 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, flip_toy_var_order
         lam = 1e-6
 
         train_mnist = ourMNIST(args, split='train')
+        val_mnist = ourMNIST(args, split='val')
         test_mnist = ourMNIST(args, split='test')
 
         train_mnist.input_dims = input_dims
@@ -97,6 +135,7 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, flip_toy_var_order
 
         #TODO: CMNIST load_dataset
         train_cmnist = FlippedMNIST(args, split='train')
+        val_cmnist = FlippedMNIST(args, split='val')
         test_cmnist = FlippedMNIST(args, split='test')
 
         train_cmnist.input_dims = input_dims
@@ -109,14 +148,18 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, flip_toy_var_order
 
         train_loader = DataLoader(
             train_mnist, batch_size, shuffle=True, **kwargs)
+        val_loader = DataLoader(
+            val_mnist, batch_size, shuffle=False, **kwargs)
         test_loader = DataLoader(
             test_mnist, batch_size, shuffle=False, **kwargs)
         train_loader2 = DataLoader(
             train_cmnist, batch_size, shuffle=True, **kwargs)
+        val_loader2 = DataLoader(
+            val_cmnist, batch_size, shuffle=False, **kwargs)
         test_loader2 = DataLoader(
             test_cmnist, batch_size, shuffle=False, **kwargs)
 
-        return [train_loader, train_loader2], [test_loader, test_loader2]
+        return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
 
     elif dataset_name in ['TOY', 'MOONS']:  # use own constructors
         train_dataset = load_dataset(dataset_name)(toy_train_size, flip_toy_var_order)
@@ -159,10 +202,17 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, flip_toy_var_order
     test_dataset.label_size = label_size
     test_dataset.lam = lam
 
+    if val_dataset is not None:
+        val_dataset.input_dims = input_dims
+        val_dataset.input_size = int(np.prod(input_dims))
+        val_dataset.label_size = label_size
+        val_dataset.lam = lam
+
     # construct dataloaders
     kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
 
     train_loader = DataLoader(train_dataset, batch_size, shuffle=True, **kwargs)
+    val_loader = DataLoader(val_dataset, batch_size, shuffle=False, **kwargs) if val_dataset is not None else None
     test_loader = DataLoader(test_dataset, batch_size, shuffle=False, **kwargs)
 
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader
