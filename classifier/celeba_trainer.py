@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
-from datasets.flipped_mnist import SplitEncodedMNIST
+from datasets.celeba import SplitEncodedCelebA
 from util import AverageMeter
 from sklearn.calibration import calibration_curve
 from torch import optim
@@ -26,19 +26,19 @@ def parse_args():
     parser.add_argument('--test_perc', type=float, default=0.1, help='%\ of data for test set')
     parser.add_argument('--biased_split', type=float, default=0.9, help='bias split for dataset')
     parser.add_argument('--ref_split', type=float, default=0.5, help='ref split for dataset')
-    parser.add_argument('--perc', type=float, default=0.5, help='size of ref dataset is \{--perc\} * size of biased')
+    parser.add_argument('--perc', type=float, default=1.0, help='size of ref dataset is \{--perc\} * size of biased')
     # model
     parser.add_argument('--n_classes', type=int, default=2, help='num classes')
-    parser.add_argument('--pixels', type=int, default=784, help='input dim / size of image')
+    parser.add_argument('--pixels', type=int, default=196608, help='input dim / size of image')
     parser.add_argument('--h_dim', type=int, default=500, help='size of hidden layer')
     parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
     parser.add_argument('--n_epochs', type=int, default=10, help='num epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
-    parser.add_argument('--num_epochs', type=int, default=10, help='number of training epochs')
+    parser.add_argument('--num_epochs', type=int, default=20, help='number of training epochs')
     
     # saving
-    parser.add_argument('--out_dir', type=str, default='/atlas/u/kechoi/multi-fairgen/classifier/mnist_results')
+    parser.add_argument('--out_dir', type=str, default='/atlas/u/kechoi/multi-fairgen/classifier/results')
     
     parser.add_argument('--num_workers', type=int, default=4, help='num workers for dataloader')
     
@@ -49,12 +49,17 @@ def train(args):
 
     # TODO: handle any dataset
     train_loader = DataLoader(
-        SplitEncodedMNIST(args),
+        SplitEncodedCelebA(args),
         batch_size=args.batch_size//2,
         shuffle=True)
 
+    val_loader = DataLoader(
+        SplitEncodedCelebA(args, split='val'),
+        batch_size=args.batch_size//2,
+        shuffle=False)
+
     test_loader = DataLoader(
-        SplitEncodedMNIST(args, split='test'),
+        SplitEncodedCelebA(args, split='test'),
         batch_size=args.batch_size//2,
         shuffle=False)
     
@@ -66,7 +71,7 @@ def train(args):
     best_loss = float('inf')
     best_state = []
 
-    train_losses, test_losses = [], []
+    train_losses, val_losses, test_losses = [], [], []
 
     print('beginning training...')
 
@@ -94,10 +99,10 @@ def train(args):
         
         train_losses.append(avg_loss_meter.avg)
         # checkpoint by best validation loss
-        test_loss, test_labels, test_probs, test_ratios = evaluate(args, model, test_loader, 'test')
+        val_loss, val_labels, val_probs, val_ratios = evaluate(args, model, val_loader, 'val')
 
-        if test_loss < best_loss:
-            best_loss = test_loss
+        if val_loss < best_loss:
+            best_loss = val_loss
             best_state = [
                 model.state_dict(),
                 optimizer.state_dict(),
@@ -105,14 +110,15 @@ def train(args):
             ]
 
         # evaluation
-        # test_loss, test_labels, test_probs, test_ratios = evaluate(args, model, test_loader, 'test')
-        # clf_diagnostics(args, val_labels, val_probs, val_ratios)
+        test_loss, test_labels, test_probs, test_ratios = evaluate(args, model, test_loader, 'test')
+        clf_diagnostics(args, val_labels, val_probs, val_ratios)
         clf_diagnostics(args, test_labels, test_probs, test_ratios)
 
-        # val_losses.append(val_loss)
+        val_losses.append(val_loss)
         test_losses.append(test_loss)
 
     np.save(os.path.join(args.out_dir, 'train_losses.npy'), train_losses)
+    np.save(os.path.join(args.out_dir, 'val_losses.npy'), val_losses)
     np.save(os.path.join(args.out_dir, 'test_losses.npy'), test_losses)   
 
     torch.save(best_state, os.path.join(args.out_dir, 'clf_ckpt.pth'))
@@ -187,7 +193,7 @@ def clf_diagnostics(args, y_valid, valid_prob_pos, ratios):
 
         # save density ratios
         np.savez(
-            os.path.join(args.out_dir, 'ratios.npz'), **{'ratios': ratios, 'd_labels': y_valid})
+            os.path.join(args.out_dir, 'ratios.npz'), **{'x': ratios})
 
 if __name__ == '__main__':
     args = parse_args()

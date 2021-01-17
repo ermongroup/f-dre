@@ -1,1 +1,7 @@
 CUDA_VISIBLE_DEVICES=0 python maf.py --train --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf' --model='maf' --dataset='MNIST_combined' --hidden_size=1024
+
+# encode z's
+CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf' --model='maf' --dataset='MNIST_combined_z' --hidden_size=1024 --restore_file /atlas/u/kechoi/multi-fairgen/results/maf/best_model_checkpoint.pt --encode
+
+# train classifier
+CUDA_VISIBLE_DEVICES=0 python3 classifier/trainer.py

@@ -23,9 +23,7 @@ import copy
 from data import fetch_dataloaders
 from models.maf import *
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
-# from models.realnvp import *
-# from flows.models.maf.maf import *
-# from flows.models.maf.realnvp import RealNVP
+
 
 parser = argparse.ArgumentParser()
 # action
@@ -165,34 +163,55 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
     filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
     save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
-def save_encodings(model, train_loader, test_loader, model_name, data_dir, dataset):
-    from copy import deepcopy
 
+def save_encodings(model, train_loader, test_loader, model_name, data_dir, dataset):
+    import numpy as np
+    from copy import deepcopy
+    model = model.to(device)
     model.eval()
 
-    ys = []
-    idx = 1
+    # separate out regular mnist and flipped mnist
+    train_mnist, train_cmnist = train_loader
+    test_mnist, test_cmnist = test_loader
+
     save_folder = os.path.join(data_dir, dataset, f'{model_name}_encodings')
     os.makedirs(save_folder, exist_ok=True)
 
-    for split, loader in zip(('train', 'test'), (train_loader, test_loader)):
+    for split, loader in zip(('train', 'test'), (train_mnist, test_mnist)):
+        save_path = os.path.join(data_dir, '{}_{}_mnist_z'.format(model_name, split))
+        ys = []
+        zs = []
+        d_ys = []
         for i, (x,y) in enumerate(loader):
-            if i == 20:
-                print(f'encoded {split}!')
-                break
-            # if i % 100 == 0:
-            #     print(f'Encoding batch [{i+1}/{len(dataloader)}]')
             x = x.to(device)
-            zs, _ = model(x)
-            for z in zs:
-                save_path = os.path.join(save_folder, f'{split}_encodings', f'{idx}.pt')
-                torch.save(z, save_path)
-                idx += 1
-            ys.append(deepcopy(y))
-        save_path = os.path.join(save_folder, f'{split}_encodings_labels.pt')
-        ys = torch.cat(ys, dim=0)
-        torch.save(ys, save_path)
-        print(f'Encoding of {dataset} {split} set completed.')
+            z, _ = model(x.squeeze())
+            zs.append(z.detach().cpu().numpy())
+            ys.append(y.detach().numpy())
+            d_ys.append(np.zeros_like(y))
+        zs = np.vstack(zs)
+        ys = np.hstack(ys)
+        d_ys = np.hstack(d_ys)
+        np.savez(save_path, **{'z': zs, 'y': ys, 'd_y': d_ys})
+        print(f'Encoding of mnist {split} set completed.')
+
+    for split, loader in zip(('train', 'test'), (train_cmnist, test_cmnist)):
+        save_path = os.path.join(data_dir, '{}_{}_cmnist_z'.format(model_name, split))
+        ys = []
+        zs = []
+        d_ys = []
+        for i, (x,y) in enumerate(loader):
+            x = x.to(device)
+            z, _ = model(x.squeeze())
+            zs.append(z.detach().cpu().numpy())
+            ys.append(y.detach().numpy())
+            d_ys.append(np.zeros_like(y))
+        zs = np.vstack(zs)
+        ys = np.hstack(ys)
+        d_ys = np.hstack(d_ys)
+        np.savez(save_path, **{'z': zs, 'y': ys, 'd_y': d_ys})
+        print(f'Encoding of flipped mnist {split} set completed.')
+    # done
+    print('Done encoding all x')
 
     
 def train_and_evaluate(model, train_loader, test_loader, optimizer, args):
@@ -299,9 +318,14 @@ if __name__ == '__main__':
     # load data
     if args.conditional: assert args.dataset in ['MNIST', 'CIFAR10', 'MNIST_combined'], 'Conditional inputs only available for labeled datasets MNIST and CIFAR10.'
     train_dataloader, test_dataloader = fetch_dataloaders(args.dataset, args.batch_size, device, args, args.flip_toy_var_order)
-    args.input_size = train_dataloader.dataset.input_size
-    args.input_dims = train_dataloader.dataset.input_dims
-    args.cond_label_size = train_dataloader.dataset.label_size if args.conditional else None
+    if args.dataset != 'MNIST_combined_z':
+        args.input_size = train_dataloader.dataset.input_size
+        args.input_dims = train_dataloader.dataset.input_dims
+        args.cond_label_size = train_dataloader.dataset.label_size if args.conditional else None
+    else:
+        args.input_size = train_dataloader[0].dataset.input_size
+        args.input_dims = train_dataloader[0].dataset.input_dims
+        args.cond_label_size = train_dataloader[0].dataset.label_size if args.conditional else None
 
     # model
     if args.model == 'made':
@@ -329,6 +353,7 @@ if __name__ == '__main__':
 
     if args.restore_file:
         # load model and optimizer states
+        print('restoring model checkpoint from {}'.format(args.restore_file))
         state = torch.load(args.restore_file, map_location=device)
         model.load_state_dict(state['model_state'])
         optimizer.load_state_dict(state['optimizer_state'])
@@ -351,6 +376,7 @@ if __name__ == '__main__':
     
     if args.encode:
         assert args.restore_file is not None, "Must specify --restore_file to encode dataset."
+        print('saving z-encodings from pretrained model...')
         save_encodings(model, train_dataloader, test_dataloader, args.model, args.data_dir, args.dataset)
     if args.generate:
         if args.dataset == 'TOY':

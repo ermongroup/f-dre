@@ -83,6 +83,41 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, flip_toy_var_order
         label_size = 10
         lam = 1e-6
 
+    elif dataset_name in ['MNIST_combined_z']:
+        input_dims = 784
+        label_size = 10
+        lam = 1e-6
+
+        train_mnist = ourMNIST(args, split='train')
+        test_mnist = ourMNIST(args, split='test')
+
+        train_mnist.input_dims = input_dims
+        train_mnist.input_size = int(np.prod(input_dims))
+        train_mnist.label_size = label_size
+
+        #TODO: CMNIST load_dataset
+        train_cmnist = FlippedMNIST(args, split='train')
+        test_cmnist = FlippedMNIST(args, split='test')
+
+        train_cmnist.input_dims = input_dims
+        train_cmnist.input_size = int(np.prod(input_dims))
+        train_cmnist.label_size = label_size
+
+        # keep these datasets separate for encoding
+        # construct dataloaders
+        kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
+
+        train_loader = DataLoader(
+            train_mnist, batch_size, shuffle=True, **kwargs)
+        test_loader = DataLoader(
+            test_mnist, batch_size, shuffle=False, **kwargs)
+        train_loader2 = DataLoader(
+            train_cmnist, batch_size, shuffle=True, **kwargs)
+        test_loader2 = DataLoader(
+            test_cmnist, batch_size, shuffle=False, **kwargs)
+
+        return [train_loader, train_loader2], [test_loader, test_loader2]
+
     elif dataset_name in ['TOY', 'MOONS']:  # use own constructors
         train_dataset = load_dataset(dataset_name)(toy_train_size, flip_toy_var_order)
         test_dataset = load_dataset(dataset_name)(toy_test_size, flip_toy_var_order)
