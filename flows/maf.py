@@ -33,6 +33,7 @@ parser.add_argument('--evaluate', action='store_true', help='Evaluate a flow.')
 parser.add_argument('--restore_file', type=str, help='Path to model to restore.')
 parser.add_argument('--encode', action='store_true', help='Save data z-encodings using a trained model.')
 # dataset
+parser.add_argument('--subset', type=bool, default=False, help='if True, uses version of MNIST that is split into (0,7)')
 parser.add_argument('--channels', type=int, default=1, help='number of channels in image')
 parser.add_argument('--image-size', type=int, default=28, help='H/W of image')
 parser.add_argument('--generate', action='store_true', help='Generate samples from a model.')
@@ -211,7 +212,11 @@ def save_encodings(model, train_loader, val_loader, test_loader, model_name, dat
     os.makedirs(save_folder, exist_ok=True)
 
     for split, loader in zip(('train', 'val', 'test'), (train_mnist, val_mnist, test_mnist)):
-        save_path = os.path.join(data_dir, 'encodings', '{}_{}_mnist_z_perc{}'.format(model_name, split, args.perc))
+        data_type = 'mnist' if not args.subset else 'mnist_subset'
+        print('encoding data type {}'.format(data_type))
+        if not os.path.exists(os.path.join(data_dir, 'encodings', data_type)):
+            os.makedirs(os.path.join(data_dir, 'encodings', data_type))
+        save_path = os.path.join(data_dir, 'encodings', data_type, '{}_{}_mnist_z_perc{}'.format(model_name, split, args.perc))
         ys = []
         zs = []
         d_ys = []
@@ -228,7 +233,7 @@ def save_encodings(model, train_loader, val_loader, test_loader, model_name, dat
         print(f'Encoding of mnist {split} set completed.')
 
     for split, loader in zip(('train', 'val', 'test'), (train_cmnist, val_cmnist, test_cmnist)):
-        save_path = os.path.join(data_dir, 'encodings', '{}_{}_cmnist_z_perc{}'.format(model_name, split, args.perc))
+        save_path = os.path.join(data_dir, 'encodings', data_type, '{}_{}_cmnist_z_perc{}'.format(model_name, split, args.perc))
         ys = []
         zs = []
         d_ys = []
@@ -351,9 +356,10 @@ if __name__ == '__main__':
     if device.type == 'cuda': torch.cuda.manual_seed(args.seed)
 
     # load data
+    # TODO: clean up these data options
     if args.conditional: assert args.dataset in ['MNIST', 'CIFAR10', 'MNIST_combined'], 'Conditional inputs only available for labeled datasets MNIST and CIFAR10.'
     train_dataloader, val_dataloader, test_dataloader = fetch_dataloaders(args.dataset, args.batch_size, device, args, args.flip_toy_var_order)
-    if args.dataset != 'MNIST_combined_z':
+    if args.dataset not in ['MNIST_combined_z', 'MNISTSubset_combined_z']:
         args.input_size = train_dataloader.dataset.input_size
         args.input_dims = train_dataloader.dataset.input_dims
         args.cond_label_size = train_dataloader.dataset.label_size if args.conditional else None
@@ -400,8 +406,8 @@ if __name__ == '__main__':
     print('Loaded settings and model:')
     print(pprint.pformat(args.__dict__))
     print(model)
-    print(pprint.pformat(args.__dict__), file=open(args.results_file, 'a'))
-    print(model, file=open(args.results_file, 'a'))
+    # print(pprint.pformat(args.__dict__), file=open(args.results_file, 'a'))
+    # print(model, file=open(args.results_file, 'a'))
 
     if args.train:
         train_and_evaluate(model, train_dataloader, test_dataloader, optimizer, args)

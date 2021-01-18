@@ -25,3 +25,8 @@ CUDA_VISIBLE_DEVICES=0 python3 classifier/trainer.py --out_dir=/atlas/u/kechoi/m
 # try training classifier
 CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=Classifier --config=mnist/resnet.yaml
 
+
+-----
+# encoding trained flows
+CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc1.0' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc1.0/best_model_checkpoint.pt --encode --subset=True
+

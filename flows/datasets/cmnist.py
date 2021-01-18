@@ -26,19 +26,19 @@ class ourMNIST(VisionDataset):
         self.perc = args.perc
         self.lam = 1e-6
         self.root = os.path.join(args.data_dir, 'mnist/')
-        mnist = datasets.MNIST(self.root, train=True if self.split == 'train' else False, download=True)  # don't apply transformations yet
+        mnist = datasets.MNIST(self.root, train=True if self.split in ['train', 'val'] else False, download=True)  # don't apply transformations
 
         if split == 'train' or split == 'val':
-            num_train = int(0.8 * len(mnist.data))
-            train_idxs = np.random.choice(np.arange(len(mnist.data)), size=num_train, replace=False)
-            val_idxs = np.setdiff1d(np.arange(len(mnist.data)), train_idxs)
+            num_train = int(0.8 * len(mnist.train_data))
+            train_idxs = np.random.choice(np.arange(len(mnist.train_data)), size=num_train, replace=False)
+            val_idxs = np.setdiff1d(np.arange(len(mnist.train_data)), train_idxs)
 
             data_idxs = train_idxs if split == 'train' else val_idxs
-            self.data = mnist.data[data_idxs]
-            self.labels = mnist.targets[data_idxs]
+            self.data = mnist.train_data[data_idxs]
+            self.labels = mnist.train_labels[data_idxs]
         else:
-            self.data = mnist.data
-            self.labels = mnist.targets
+            self.data = mnist.test_data
+            self.labels = mnist.test_labels
 
     def _data_transform(self, x):
         # performs dequantization, rescaling, then logit transform
@@ -78,16 +78,16 @@ class FlippedMNIST(VisionDataset):
         self.perc = args.perc
         self.lam = 1e-6
         self.root = os.path.join(args.data_dir, 'mnist/')
-        mnist = datasets.MNIST(self.root, train=True if self.split == 'train' else False, download=True)  # don't apply transformations yet
+        mnist = datasets.MNIST(self.root, train=True if self.split in ['train', 'val'] else False, download=True)  # don't apply transformations
 
         if split == 'train' or split == 'val':
-            num_train = int(0.8 * len(mnist.data))
-            train_idxs = np.random.choice(np.arange(len(mnist.data)), size=num_train, replace=False)
-            val_idxs = np.setdiff1d(np.arange(len(mnist.data)), train_idxs)
+            num_train = int(0.8 * len(mnist.train_data))
+            train_idxs = np.random.choice(np.arange(len(mnist.train_data)), size=num_train, replace=False)
+            val_idxs = np.setdiff1d(np.arange(len(mnist.train_data)), train_idxs)
 
             data_idxs = train_idxs if split == 'train' else val_idxs
-            data = mnist.data[data_idxs]
-            labels = mnist.targets[data_idxs]
+            data = mnist.train_data[data_idxs]
+            labels = mnist.train_labels[data_idxs]
         else:
             data = mnist.test_data
             labels = mnist.test_labels
@@ -167,20 +167,27 @@ class MNISTSubset(ourMNIST):
         self.digits = torch.Tensor(args.digits)
         # digit_percs[i] = what % of the dataset digits[i] should make up
         self.digit_percs = torch.Tensor(args.digit_percs)
-
         max_perc_idx = torch.argmax(self.digit_percs)
-        n_samples_needed = sum(mnist.targets == self.digits[max_perc_idx]) // self.digit_percs[max_perc_idx]
+
+        # get correct data split
+        if split != 'test':
+            data = mnist.train_data
+            targets = mnist.train_labels
+        else:
+            data = mnist.test_data
+            targets = mnist.test_labels
+        n_samples_needed = sum(targets == self.digits[max_perc_idx]) // self.digit_percs[max_perc_idx]
         subset_idxs = []
         for digit, perc in zip(self.digits, self.digit_percs):
-            digit_idxs = torch.where(mnist.targets == digit)[0]
+            digit_idxs = torch.where(targets == digit)[0]
             
             # balanced digit split for test/val set; split by digit_percs for train
             n_digit_samples = int(perc * n_samples_needed) if split == 'train' else int(n_samples_needed.item() // len(self.digits))
             digit_idxs = digit_idxs[:n_digit_samples]
             subset_idxs.extend(digit_idxs)
         
-        self.data = mnist.data[subset_idxs]
-        self.labels = mnist.targets[subset_idxs]
+        self.data = data[subset_idxs]
+        self.labels = targets[subset_idxs]
 
         if split == 'train' or split == 'val':
             num_train = int(0.8 * len(self.data))
@@ -217,16 +224,24 @@ class FlippedMNISTSubset(ourMNIST):
         self.digit_percs = torch.Tensor(args.digit_percs)
 
         mnist = datasets.MNIST(self.root, train=True if self.split != 'test' else False, download=True)
-        self.data, self.labels = self.initialize_data_splits(mnist, split)
+        # get correct data split
+        if split != 'test':
+            data = mnist.train_data
+            targets = mnist.train_labels
+        else:
+            data = mnist.test_data
+            targets = mnist.test_labels
+        self.data, self.labels = self.initialize_data_splits(
+            data, targets, split)
 
-    def initialize_data_splits(self, mnist, split):
+    def initialize_data_splits(self, data, targets, split):
         
         # select datapoints with desired digits
         digit_idxs = [] 
         for digit in self.digits:
-            digit_idxs.extend(torch.where(mnist.targets == digit)[0])
-        data = mnist.data[digit_idxs]
-        labels = mnist.targets[digit_idxs]
+            digit_idxs.extend(torch.where(targets == digit)[0])
+        data = data[digit_idxs]
+        labels = targets[digit_idxs]
         
         # divide into train and val sets
         if split == 'train' or split == 'val':
