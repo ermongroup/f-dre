@@ -2,11 +2,8 @@ import os
 import torch
 from torchvision import datasets
 from torch.utils.data import Dataset, TensorDataset, random_split
-
 import numpy as np
-from .looping import LoopingDataset
 from .vision import VisionDataset
-from .dataset_utils import download_file_from_google_drive, check_integrity
 from .mnist import MNIST
 
 

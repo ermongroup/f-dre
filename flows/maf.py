@@ -181,6 +181,7 @@ def save_encodings(model, train_loader, val_loader, test_loader, model_name, dat
     os.makedirs(save_folder, exist_ok=True)
 
     for split, loader in zip(('train', 'val', 'test'), (train_mnist, val_mnist, test_mnist)):
+        # save_path = os.path.join(data_dir, '{}_{}_mnist_z_perc1'.format(model_name, split))
         save_path = os.path.join(data_dir, '{}_{}_mnist_z'.format(model_name, split))
         ys = []
         zs = []
@@ -198,6 +199,7 @@ def save_encodings(model, train_loader, val_loader, test_loader, model_name, dat
         print(f'Encoding of mnist {split} set completed.')
 
     for split, loader in zip(('train', 'val', 'test'), (train_cmnist, val_cmnist, test_cmnist)):
+        # save_path = os.path.join(data_dir, '{}_{}_cmnist_z_perc1'.format(model_name, split))
         save_path = os.path.join(data_dir, '{}_{}_cmnist_z'.format(model_name, split))
         ys = []
         zs = []
@@ -207,7 +209,7 @@ def save_encodings(model, train_loader, val_loader, test_loader, model_name, dat
             z, _ = model(x.squeeze())
             zs.append(z.detach().cpu().numpy())
             ys.append(y.detach().numpy())
-            d_ys.append(np.zeros_like(y))
+            d_ys.append(np.ones_like(y))
         zs = np.vstack(zs)
         ys = np.hstack(ys)
         d_ys = np.hstack(d_ys)

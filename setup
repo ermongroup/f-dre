@@ -5,3 +5,17 @@ CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/d
 
 # train classifier
 CUDA_VISIBLE_DEVICES=0 python3 classifier/trainer.py
+
+(in x-space)
+CUDA_VISIBLE_DEVICES=1 python3 classifier/trainer.py --x_space=True --out_dir=/atlas/u/kechoi/multi-fairgen/classifier/mnist_x_results
+
+
+
+# train regular flow
+CUDA_VISIBLE_DEVICES=0 python maf.py --train --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf_perc1.0' --model='maf' --dataset='MNIST_combined' --hidden_size=1024 --perc=1.0 --n_epochs=200
+
+# encode z
+CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf_perc1.0' --model='maf' --dataset='MNIST_combined_z' --hidden_size=1024 --restore_file /atlas/u/kechoi/multi-fairgen/results/maf_perc1.0/best_model_checkpoint.pt --encode
+
+CUDA_VISIBLE_DEVICES=0 python3 classifier/trainer.py --out_dir=/atlas/u/kechoi/multi-fairgen/classifier/mnist_perc1_results
+

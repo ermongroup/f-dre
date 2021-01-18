@@ -5,13 +5,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
-from datasets.flipped_mnist import SplitEncodedMNIST
+from datasets.flipped_mnist import (
+    SplitEncodedMNIST,
+    SplitMNIST
+)
 from util import AverageMeter
 from sklearn.calibration import calibration_curve
 from torch import optim
 from torch.utils.data import DataLoader
 
-from classifier import MLPClassifier
+from mlp_classifier import MLPClassifier
+from resnet_classifier import ResnetClassifier
 
 
 def parse_args():
@@ -30,12 +34,13 @@ def parse_args():
     # model
     parser.add_argument('--n_classes', type=int, default=2, help='num classes')
     parser.add_argument('--pixels', type=int, default=784, help='input dim / size of image')
-    parser.add_argument('--h_dim', type=int, default=500, help='size of hidden layer')
+    parser.add_argument('--h_dim', type=int, default=100, help='size of hidden layer')
     parser.add_argument('--dropout', type=float, default=0.1, help='dropout')
     parser.add_argument('--n_epochs', type=int, default=10, help='num epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
-    parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
+    parser.add_argument('--lr', type=float, default=0.0002, help='learning rate')
     parser.add_argument('--num_epochs', type=int, default=10, help='number of training epochs')
+    parser.add_argument('--x_space', type=bool, default=False, help='whether to do classification in x-space')
     
     # saving
     parser.add_argument('--out_dir', type=str, default='/atlas/u/kechoi/multi-fairgen/classifier/mnist_results')
@@ -46,29 +51,42 @@ def parse_args():
 
 
 def train(args):
-
     # TODO: handle any dataset
-    train_loader = DataLoader(
-        SplitEncodedMNIST(args),
-        batch_size=args.batch_size//2,
-        shuffle=True)
+    if args.x_space:
+        train_loader = DataLoader(
+            SplitMNIST(args),
+            batch_size=args.batch_size//2,
+            shuffle=True)
 
-    val_loader = DataLoader(
-        SplitEncodedMNIST(args, split='val'),
-        batch_size=args.batch_size//2,
-        shuffle=False)
+        test_loader = DataLoader(
+            SplitMNIST(args, split='test'),
+            batch_size=args.batch_size//2,
+            shuffle=False)
+    else:
+        print('using z-space for DRE')
+        train_loader = DataLoader(
+            SplitEncodedMNIST(args),
+            batch_size=args.batch_size//2,
+            shuffle=True)
 
-    test_loader = DataLoader(
-        SplitEncodedMNIST(args, split='test'),
-        batch_size=args.batch_size//2,
-        shuffle=False)
+        val_loader = DataLoader(
+            SplitEncodedMNIST(args, split='val'),
+            batch_size=args.batch_size//2,
+            shuffle=False)
+
+        test_loader = DataLoader(
+            SplitEncodedMNIST(args, split='test'),
+            batch_size=args.batch_size//2,
+            shuffle=False)
     
-    model = MLPClassifier(args).to(args.device)
+    # model = MLPClassifier(args).to(args.device)
+    model = ResnetClassifier(args).to(args.device)
     model = torch.nn.DataParallel(model)
 
     optimizer = optim.Adam(model.parameters(), lr=args.lr)
     
     best_loss = float('inf')
+    best_acc = 0
     best_state = []
 
     train_losses, val_losses, test_losses = [], [], []
@@ -85,7 +103,8 @@ def train(args):
 
             # random permutation of data
             idx = torch.randperm(len(z))
-            z = z[idx].to(args.device).view(len(idx), -1)
+            # z = z[idx].to(args.device).view(len(idx), -1)
+            z = z[idx].to(args.device).view(len(idx), 1, 28, 28)
             y = y[idx].to(args.device).long()
             
             # NOTE: here, biased (y=0) and reference (y=1)
@@ -98,11 +117,14 @@ def train(args):
             optimizer.step()
         
         train_losses.append(avg_loss_meter.avg)
-        # checkpoint by best test loss
-        test_loss, test_labels, test_probs, test_ratios = evaluate(args, model, test_loader, 'test')
+        # checkpoint by best validation loss
+        test_loss, test_acc, test_labels, test_probs, test_ratios = evaluate(args, model, test_loader, 'test')
 
-        if test_loss < best_loss:
+        if test_loss <= best_loss:
+        # if test_acc >= best_acc:
+            print('saving best model at epoch {}'.format(epoch))
             best_loss = test_loss
+            best_acc = test_acc
             best_state = [
                 model.state_dict(),
                 optimizer.state_dict(),
@@ -140,7 +162,8 @@ def evaluate(args, model, loader, split):
                 torch.zeros(z_biased.shape[0])
             ])
             
-            z = z.to(args.device).view(len(z), -1)
+            # z = z.to(args.device).view(len(z), -1)
+            z = z.to(args.device).view(len(z), 1, 28, 28)
             y = y.to(args.device).long()
 
             logits, probs = model(z)
@@ -165,7 +188,7 @@ def evaluate(args, model, loader, split):
     ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
     p_y1 = p_y1.data.cpu().numpy()
 
-    return loss, labels, p_y1, ratios
+    return loss, correct, labels, p_y1, ratios
     
 
 def clf_diagnostics(args, y_valid, valid_prob_pos, ratios, split):
