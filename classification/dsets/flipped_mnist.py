@@ -14,6 +14,7 @@ class SplitMNIST(Dataset):
     def __init__(self, config, split='train'):
 
         self.config = config
+        self.subset = config.data.subset
         self.perc = config.data.perc
         self.biased_dset = LoopingDataset(
             ourMNIST(config, split=split))
@@ -42,14 +43,16 @@ class SplitEncodedMNIST(Dataset):
     def __init__(self, config, split='train'):
 
         self.config = config
+        self.subset = config.data.subset
         self.perc = config.data.perc
         self.ref_dset = self.load_dataset(split, 'cmnist')
         self.biased_dset = self.load_dataset(split, 'mnist')
 
     def load_dataset(self, split, variant='mnist'):
+        data_type = 'mnist' if not self.subset else 'mnist_subset'
         fpath = os.path.join(
-            self.config.training.data_dir, 'encodings', 'maf_{}_{}_z_perc{}.npz'.format(
-            split, variant, args.perc))
+            self.config.training.data_dir, 'encodings', data_type, 'maf_{}_{}_z_perc{}.npz'.format(
+            split, variant, self.perc))
         record = np.load(fpath)
         print('loading dataset from {}'.format(fpath))
         zs = torch.from_numpy(record['z']).float()

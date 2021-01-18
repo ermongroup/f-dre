@@ -4,20 +4,20 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "mnist_z_perc0.5"
+  exp_id: "mnist_subset_z_perc0.1"
   out_dir: "/atlas/u/kechoi/multi-fairgen/classification/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
 data:
   dataset: "MNIST"
-  subset: false
+  subset: true
   image_size: 28
   channels: 1
   random_flip: false
   x_space: false
   train_perc: 0.8
   test_perc: 0.1
-  perc: 0.5
+  perc: 0.1
   biased_split: 0.9
   ref_split: 0.5
   class_idx: 20

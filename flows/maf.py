@@ -28,12 +28,13 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 parser = argparse.ArgumentParser()
 # action
+parser.add_argument('--perc', type=float, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
+parser.add_argument('--subset', type=bool, help='if True, uses version of MNIST that is split into (0,7)')
+# others
 parser.add_argument('--train', action='store_true', help='Train a flow.')
 parser.add_argument('--evaluate', action='store_true', help='Evaluate a flow.')
 parser.add_argument('--restore_file', type=str, help='Path to model to restore.')
 parser.add_argument('--encode', action='store_true', help='Save data z-encodings using a trained model.')
-# dataset
-parser.add_argument('--subset', type=bool, default=False, help='if True, uses version of MNIST that is split into (0,7)')
 parser.add_argument('--channels', type=int, default=1, help='number of channels in image')
 parser.add_argument('--image-size', type=int, default=28, help='H/W of image')
 parser.add_argument('--generate', action='store_true', help='Generate samples from a model.')
@@ -44,7 +45,6 @@ parser.add_argument('--results_file', default='results.txt', help='Filename wher
 parser.add_argument('--no_cuda', action='store_true', help='Do not use cuda.')
 # data
 parser.add_argument('--dataset', default='toy', help='Which dataset to use.')
-parser.add_argument('--perc', type=float, default=0.5, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
 parser.add_argument('--digits', type=list, default=[0, 7], help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
 parser.add_argument('--digit_percs', type=list, default=[0.5, 0.5], help='Used with --digits; perc of each digit to include in dataset.')
 parser.add_argument('--flip_toy_var_order', action='store_true', help='Whether to flip the toy dataset variable order to (x2, x1).')
