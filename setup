@@ -19,3 +19,9 @@ CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/d
 
 CUDA_VISIBLE_DEVICES=0 python3 classifier/trainer.py --out_dir=/atlas/u/kechoi/multi-fairgen/classifier/mnist_perc1_results
 
+
+-----------------------------
+# REFACTORED CODE!!!!!! (START HERE)
+# try training classifier
+CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=Classifier --config=mnist/resnet.yaml
+

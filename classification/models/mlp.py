@@ -16,7 +16,6 @@ class MLPClassifier(nn.Module):
       self.dropout = nn.Dropout(args.dropout)
       self.bn = nn.BatchNorm1d(self.h_dim)
 
-      # TODO: don't hardcode to celeba
       self.fc1 = nn.Linear(self.in_dim, self.h_dim)
       self.fc2 = nn.Linear(self.h_dim, self.h_dim)
       self.fc3 = nn.Linear(self.h_dim, self.n_classes)

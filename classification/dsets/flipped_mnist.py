@@ -11,12 +11,14 @@ class SplitMNIST(Dataset):
     """
     same dataset class as SplitEncodedMNIST, except operating in x-space (mostly as a sanity check)
     """
-    def __init__(self, args, split='train'):
+    def __init__(self, config, split='train'):
 
-        self.args = args
-        self.perc = args.perc
-        self.biased_dset = LoopingDataset(ourMNIST(args, split=split))
-        self.ref_dset = LoopingDataset(FlippedMNIST(args, split=split))
+        self.config = config
+        self.perc = config.data.perc
+        self.biased_dset = LoopingDataset(
+            ourMNIST(config, split=split))
+        self.ref_dset = LoopingDataset(
+            FlippedMNIST(config, split=split))
     
     def __getitem__(self, index):
         ref_z, _ = self.ref_dset[index]
@@ -37,15 +39,15 @@ class SplitEncodedMNIST(Dataset):
     dataset that returns (ref_z, biased_z) when iterated through via dataloader
     (need to specify targets upon dataloading)
     """
-    def __init__(self, args, split='train'):
+    def __init__(self, config, split='train'):
 
-        self.args = args
-        self.perc = args.perc
+        self.config = config
+        self.perc = config.data.perc
         self.ref_dset = self.load_dataset(split, 'cmnist')
         self.biased_dset = self.load_dataset(split, 'mnist')
 
     def load_dataset(self, split, variant='mnist'):
-        fpath = os.path.join(self.args.data_dir, 'maf_{}_{}_z.npz'.format(
+        fpath = os.path.join(self.config.training.data_dir, 'maf_{}_{}_z.npz'.format(
             split, variant))
         record = np.load(fpath)
         print('loading dataset from {}'.format(fpath))

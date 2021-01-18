@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn.functional as F
-from datasets.celeba import SplitEncodedCelebA
-from util import AverageMeter
+from dsets.celeba import SplitEncodedCelebA
+from utils import AverageMeter
 from sklearn.calibration import calibration_curve
 from torch import optim
 from torch.utils.data import DataLoader
 
-from classifier import MLPClassifier
+from models.mlp import MLPClassifier
 
 
 def parse_args():

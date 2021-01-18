@@ -5,6 +5,7 @@ import torch
 from torch.utils.data import Dataset, Subset
 from .looping import LoopingDataset
 
+
 class EncodedCMNIST(Dataset):
     """
     encodings of entire CMNIST dataset
