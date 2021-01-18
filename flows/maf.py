@@ -2,7 +2,6 @@
 Masked Autoregressive Flow for Density Estimation
 arXiv:1705.07057v4
 """
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -19,6 +18,8 @@ import math
 import argparse
 import pprint
 import copy
+import numpy as np
+from copy import deepcopy
 
 from data import fetch_dataloaders
 from models.maf import *
@@ -31,6 +32,9 @@ parser.add_argument('--train', action='store_true', help='Train a flow.')
 parser.add_argument('--evaluate', action='store_true', help='Evaluate a flow.')
 parser.add_argument('--restore_file', type=str, help='Path to model to restore.')
 parser.add_argument('--encode', action='store_true', help='Save data z-encodings using a trained model.')
+# dataset
+parser.add_argument('--channels', type=int, default=1, help='number of channels in image')
+parser.add_argument('--image-size', type=int, default=28, help='H/W of image')
 parser.add_argument('--generate', action='store_true', help='Generate samples from a model.')
 parser.add_argument('--fair-generate', action='store_true', help='Generate samples from a model using importance weights.')
 parser.add_argument('--data_dir', default='./data/', help='Location of datasets.')
@@ -157,8 +161,7 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
     # convert and save images
     
     # samples = samples.view(samples.shape[0], *args.input_dims)
-    # TODO: hack for mnist shapes
-    samples = samples.view((samples.shape[0], 1, 28, 28))
+    samples = samples.view((samples.shape[0], args.channels, args.image_size, args.image_size))
     # samples = (torch.sigmoid(samples) - dataset_lam) / (1 - 2 * dataset_lam)
     samples = torch.sigmoid(samples)
     samples = torch.clamp(samples, 0., 1.)
@@ -166,9 +169,36 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
     save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
 
+@torch.no_grad()
+def fair_generate(model, dataset_lam, args, step=None, n_row=10):
+    model.eval()
+    """
+    TODO: this probably doesn't need to be its own function
+    TODO: need to modify this function
+    (1) need to load in trained classifier
+    (2) need to use classifier for generation
+    """
+    # unconditional model
+    u = model.base_dist.sample((n_row**2, args.n_components)).squeeze()
+    samples, _ = model.inverse(u)
+    log_probs = model.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
+    samples = samples[log_probs]
+
+    # TODO: load classifier
+    # TODO: get weights
+    # TODO: get reweighted samples
+
+    # convert and save images
+    samples = samples.view((samples.shape[0], args.channels, args.image_size, args.image_size))
+    samples = torch.sigmoid(samples)
+    samples = torch.clamp(samples, 0., 1.)
+
+    # save images
+    filename = 'fair_generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
+    save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
+
+
 def save_encodings(model, train_loader, val_loader, test_loader, model_name, data_dir, dataset):
-    import numpy as np
-    from copy import deepcopy
     model = model.to(device)
     model.eval()
 
@@ -181,8 +211,7 @@ def save_encodings(model, train_loader, val_loader, test_loader, model_name, dat
     os.makedirs(save_folder, exist_ok=True)
 
     for split, loader in zip(('train', 'val', 'test'), (train_mnist, val_mnist, test_mnist)):
-        # save_path = os.path.join(data_dir, '{}_{}_mnist_z_perc1'.format(model_name, split))
-        save_path = os.path.join(data_dir, '{}_{}_mnist_z'.format(model_name, split))
+        save_path = os.path.join(data_dir, 'encodings', '{}_{}_mnist_z_perc{}'.format(model_name, split, args.perc))
         ys = []
         zs = []
         d_ys = []
@@ -199,8 +228,7 @@ def save_encodings(model, train_loader, val_loader, test_loader, model_name, dat
         print(f'Encoding of mnist {split} set completed.')
 
     for split, loader in zip(('train', 'val', 'test'), (train_cmnist, val_cmnist, test_cmnist)):
-        # save_path = os.path.join(data_dir, '{}_{}_cmnist_z_perc1'.format(model_name, split))
-        save_path = os.path.join(data_dir, '{}_{}_cmnist_z'.format(model_name, split))
+        save_path = os.path.join(data_dir, 'encodings', '{}_{}_cmnist_z_perc{}'.format(model_name, split, args.perc))
         ys = []
         zs = []
         d_ys = []
@@ -274,6 +302,7 @@ def plot_density(dist, ax, ranges, flip_var_order=False):
     ax.set_xticks([xmin, xmax])
     ax.set_yticks([ymin, ymax])
 
+
 def plot_dist_sample(data, ax, ranges):
     ax.scatter(data[:,0].data.numpy(), data[:,1].data.numpy(), s=10, perc=0.4)
     # format
@@ -282,6 +311,7 @@ def plot_dist_sample(data, ax, ranges):
     ax.set_ylim(ymin, ymax)
     ax.set_xticks([xmin, xmax])
     ax.set_yticks([ymin, ymax])
+
 
 def plot_sample_and_density(model, target_dist, args, ranges_density=[[-5,20],[-10,10]], ranges_sample=[[-4,4],[-4,4]], step=None):
     model.eval()
@@ -388,6 +418,9 @@ if __name__ == '__main__':
             base_dist = train_dataloader.dataset.base_dist
             plot_sample_and_density(model, base_dist, args, ranges_density=[[-15,4],[-3,3]], ranges_sample=[[-1.5,1.5],[-3,3]])
         elif args.dataset == 'MNIST' or args.dataset == 'FlippedMNIST' or args.dataset == 'MNIST_combined':
-            generate(model, train_dataloader.dataset.lam, args)
+            if not args.fair_generate:
+                generate(model, train_dataloader.dataset.lam, args)
+            else:
+                fair_generate(model, train_dataloader.dataset.lam, args)
 
 

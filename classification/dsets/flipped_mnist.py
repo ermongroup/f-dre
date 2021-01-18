@@ -47,11 +47,11 @@ class SplitEncodedMNIST(Dataset):
         self.biased_dset = self.load_dataset(split, 'mnist')
 
     def load_dataset(self, split, variant='mnist'):
-        fpath = os.path.join(self.config.training.data_dir, 'maf_{}_{}_z.npz'.format(
-            split, variant))
+        fpath = os.path.join(
+            self.config.training.data_dir, 'encodings', 'maf_{}_{}_z_perc{}.npz'.format(
+            split, variant, args.perc))
         record = np.load(fpath)
         print('loading dataset from {}'.format(fpath))
-        # record = np.load(os.path.join(self.args.data_dir, 'maf_{}_{}_z_perc1.npz'.format(split, variant)))
         zs = torch.from_numpy(record['z']).float()
         ys = record['y']
         d_ys = torch.from_numpy(record['d_y']).float()

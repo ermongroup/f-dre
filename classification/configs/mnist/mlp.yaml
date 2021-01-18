@@ -4,7 +4,7 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "mnist_z_perc0.5"
+  exp_id: "mnist_z_perc0.5_mlp"
   out_dir: "/atlas/u/kechoi/multi-fairgen/classification/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
@@ -23,7 +23,7 @@ data:
   num_workers: 4
 
 model:
-  name: "resnet"
+  name: "mlp"
   spectral_norm: true
   batch_norm: true
   in_dim: 784
