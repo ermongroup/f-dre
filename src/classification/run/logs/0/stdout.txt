@@ -1,5 +1,0 @@
-INFO - main.py - 2021-01-18 16:34:09,949 - Using device: cuda
-INFO - main.py - 2021-01-18 16:34:09,951 - Writing log file to run/logs/0
-INFO - main.py - 2021-01-18 16:34:09,951 - Exp instance id = 405442
-INFO - main.py - 2021-01-18 16:34:09,951 - Exp comment = 
-INFO - main.py - 2021-01-18 16:34:09,951 - Config =
