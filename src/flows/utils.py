@@ -5,6 +5,7 @@ import numpy as np
 def classify_examples(model, config):
     """
     classifies generated samples into appropriate classes 
+    NOTE: unused atm
     """
     model.eval()
     preds = []
