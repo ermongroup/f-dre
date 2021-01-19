@@ -180,9 +180,13 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
 def load_classifier(args, name):
     if name == 'resnet':
         clf = ResnetClassifier(args)
+        ckpt_path = args.clf_ckpt
     else:
-        clf = MLPClassifier(args)
-    ckpt_path = args.clf_ckpt
+        # TODO: load config file
+        # TODO: have global paths to pre-trained attribute classifiers
+        config = config
+        clf = MLPClassifier(config)
+        ckpt_path = ATTR_CLFS[dataset]  # or sth similar
     assert os.path.exists(ckpt_path)
     print('loading pre-trained DRE classifier checkpoint from {}'.format(ckpt_path))
 
@@ -230,6 +234,9 @@ def generate_many_samples(model, args, clf):
         'preds': preds,
         'l2_fair_disc': fair_disc_l2,
         })
+    # maybe just save some samples?
+    filename = 'samples'+ '.png'
+    save_image(all_samples[0:100], os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
 
 @torch.no_grad()
@@ -239,18 +246,25 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
 
     model.eval()
     dre_clf.eval()
-    attr_clf.eval()
+    # attr_clf.eval()
 
     print('generating {} samples in batches of 1000...'.format(args.n_samples))
     n_batches = int(args.n_samples // 1000)
     for n in range(n_batches):
         if (n % 10 == 0) and (n > 0):
             print('on iter {}/{}'.format(n, n_batches))
-        u = model.base_dist.sample((1000, args.n_components)).squeeze()
+        u = model.base_dist.sample((1000, args.n_components)).squeeze().to(device)
         
         # TODO: reweight the samples via dre_clf
-
-        samples, _ = model.inverse(u)
+        from torch.distributions import Normal
+        logits, probas = dre_clf(u.view(1000, 1, 28, 28))
+        alpha = 0.065
+        ratios = (probas[:, 1]/probas[:, 0])**(alpha)
+        u_hat = u * torch.sqrt(ratios).unsqueeze(1)
+        # u_hat = Normal(0, torch.sqrt(ratios)).sample((1000, args.n_components)).squeeze()
+        print('original u range:', u.min(), u.max())
+        print('reweighted u range:', u_hat.min(), u_hat.max())
+        samples, _ = model.inverse(u_hat)
         log_probs = model.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
         samples = samples[log_probs]
         samples = samples.view((samples.shape[0], args.channels, args.image_size, args.image_size))
@@ -258,22 +272,26 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
         samples = torch.clamp(samples, 0., 1.)  # check if we want to multiply by 255 and transpose if we're gonna do metric stuff on here
 
         # get classifier predictions
-        logits, probas = attr_clf(samples.view(len(samples), -1))
-        _, pred = torch.max(probas, 1)
+        # logits, probas = attr_clf(samples.view(len(samples), -1))
+        # _, pred = torch.max(probas, 1)
 
         # save things
-        preds.append(pred.detach().cpu().numpy())
+        # preds.append(pred.detach().cpu().numpy())
         all_samples.append(samples.detach().cpu().numpy())
     all_samples = np.vstack(all_samples)
-    preds = np.hstack(preds)
-    fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
+    # preds = np.hstack(preds)
+    # fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
     # np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
-    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
-    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
-        **{
-        'preds': preds,
-        'l2_fair_disc': fair_disc_l2,
-        })
+    
+    # np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
+    # np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
+    #     **{
+    #     'preds': preds,
+    #     'l2_fair_disc': fair_disc_l2,
+    #     })
+    # maybe just save some samples?
+    filename = 'fair_samples_{}'.format(alpha) + '.png'
+    save_image(torch.from_numpy(all_samples[0:100]), os.path.join('/atlas/u/kechoi/multi-fairgen/src/flows/results/subset_maf_perc{}/'.format(args.perc), filename), nrow=n_row, normalize=True)
 
 
 def save_encodings(model, train_loader, val_loader, test_loader, model_name, data_dir, dataset):
@@ -504,9 +522,10 @@ if __name__ == '__main__':
             generate(model, train_dataloader.dataset.lam, args)
     if args.generate_samples:
         if 'MNIST' in args.dataset:
-            attr_clf = load_classifier(args, 'mlp')
+            # attr_clf = load_classifier(args, 'mlp')
             if not args.fair_generate:
                 generate_many_samples(model, args, attr_clf)
             else:
                 dre_clf = load_classifier(args, 'resnet')
-                fair_generate(model, args, dre_clf, attr_clf)
+                # fair_generate(model, args, dre_clf, attr_clf)
+                fair_generate(model, args, dre_clf, dre_clf)
