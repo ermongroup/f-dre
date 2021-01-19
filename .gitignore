@@ -4,3 +4,4 @@ datasets/__pycache__/
 data
 *.pyc
 run/
+checkpoints/

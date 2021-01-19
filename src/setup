@@ -46,3 +46,5 @@ CUDA_VISIBLE_DEVICES=1 python src/flows/maf.py --data_dir='/atlas/u/kechoi/multi
 
 # fair generate?
 CUDA_VISIBLE_DEVICES=1 python src/flows/maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc0.1' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc0.1/best_model_checkpoint.pt --subset=True --perc=0.1 --clf-ckpt=/atlas/u/kechoi/multi-fairgen/src/classification/checkpoints/mnist_subset_z_perc0.1/model_best.pth --generate_samples --fair-generate --n-samples=2000 
+
+python src/flows/maf.py --data_dir=/atlas/u/madeline/multi-fairgen/data --output_dir=/atlas/u/madeline/multi-fairgen/results/ --model='maf' --dataset='MNISTSubset' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc0.1/best_model_checkpoint.pt --subset=True --perc=0.1 --generate_samples --n-samples=2000 

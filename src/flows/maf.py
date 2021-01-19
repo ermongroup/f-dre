@@ -212,7 +212,7 @@ def load_classifier(args, name):
 
 
 @torch.no_grad()
-def generate_many_samples(model, args, clf):
+def generate_many_samples(model, args, clf, n_row=10):
     all_samples = []
     preds = []
     model.eval()
@@ -241,13 +241,18 @@ def generate_many_samples(model, args, clf):
     all_samples = np.vstack(all_samples)
     preds = np.hstack(preds)
     fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
-    # np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
-    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
-    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
+    np.savez(os.path.join(args.output_dir, f'{args.dataset}_maf_perc{args.perc}', 'samples'), **{'x': all_samples})
+    np.savez(os.path.join(args.output_dir, f'{args.dataset}_maf_perc{args.perc}', 'metrics'), 
         **{
         'preds': preds,
         'l2_fair_disc': fair_disc_l2,
         })
+    # np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
+    # np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
+    #     **{
+    #     'preds': preds,
+    #     'l2_fair_disc': fair_disc_l2,
+    #     })
     # maybe just save some samples?
     filename = 'samples'+ '.png'
     save_image(all_samples[0:100], os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
@@ -260,7 +265,7 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
 
     model.eval()
     dre_clf.eval()
-    # attr_clf.eval()
+    attr_clf.eval()
 
     print('generating {} samples in batches of 1000...'.format(args.n_samples))
     n_batches = int(args.n_samples // 1000)
@@ -286,23 +291,23 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
         samples = torch.clamp(samples, 0., 1.)  # check if we want to multiply by 255 and transpose if we're gonna do metric stuff on here
 
         # get classifier predictions
-        # logits, probas = attr_clf(samples.view(len(samples), -1))
-        # _, pred = torch.max(probas, 1)
+        logits, probas = attr_clf(samples.view(len(samples), -1))
+        _, pred = torch.max(probas, 1)
 
         # save things
-        # preds.append(pred.detach().cpu().numpy())
+        preds.append(pred.detach().cpu().numpy())
         all_samples.append(samples.detach().cpu().numpy())
     all_samples = np.vstack(all_samples)
-    # preds = np.hstack(preds)
-    # fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
-    # np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
+    preds = np.hstack(preds)
+    fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
+    np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
     
-    # np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
-    # np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
-    #     **{
-    #     'preds': preds,
-    #     'l2_fair_disc': fair_disc_l2,
-    #     })
+    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
+    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
+        **{
+        'preds': preds,
+        'l2_fair_disc': fair_disc_l2,
+        })
     # maybe just save some samples?
     filename = 'fair_samples_{}'.format(alpha) + '.png'
     save_image(torch.from_numpy(all_samples[0:100]), os.path.join('/atlas/u/kechoi/multi-fairgen/src/flows/results/subset_maf_perc{}/'.format(args.perc), filename), nrow=n_row, normalize=True)
