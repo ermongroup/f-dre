@@ -90,16 +90,14 @@ class Classifier(BaseTrainer):
             raise NotImplementedError()
 
     def get_datasets(self):
-        # train, val, test = dsets.get_dataset(self.args, self.config)
-        train, test = dsets.get_dataset(self.args, self.config)
+        train, val, test = dsets.get_dataset(self.args, self.config)
 
         # create dataloaders
         train = data_utils.DataLoader(train, batch_size=self.config.training.batch_size//2, shuffle=True)
-        # val = data_utils.DataLoader(val, batch_size=self.config.training.batch_size//2, shuffle=False)
+        val = data_utils.DataLoader(val, batch_size=self.config.training.batch_size//2, shuffle=False)
         test = data_utils.DataLoader(test, batch_size=self.config.training.batch_size//2, shuffle=False)
 
-        # return train, val, test
-        return train, test, test
+        return train, val, test
 
     def accuracy(self, logits, y):
         with torch.no_grad():

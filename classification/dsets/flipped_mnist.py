@@ -22,8 +22,36 @@ class SplitMNIST(Dataset):
             FlippedMNIST(config, split=split))
     
     def __getitem__(self, index):
-        ref_z, _ = self.ref_dset[index]
-        biased_z, _ = self.biased_dset[index]
+        ref_z, ref_label = self.ref_dset[index]
+        biased_z, biased_label = self.biased_dset[index]
+
+        ref_z = ref_z.float() / 255.
+        biased_z = biased_z.float() / 255.
+
+        #TODO: eventually also return attr label in addition to ref/bias label?
+        return (ref_z, biased_z)
+    
+    def __len__(self):
+        return len(self.ref_dset) + len(self.biased_dset)
+
+
+class SplitMNISTSubset(Dataset):
+    """
+    same dataset class as SplitEncodedMNIST, except operating in x-space (mostly as a sanity check)
+    """
+    def __init__(self, config, split='train'):
+
+        self.config = config
+        self.subset = config.data.subset
+        self.perc = config.data.perc
+        self.biased_dset = LoopingDataset(
+            MNISTSubset(config, split=split))
+        self.ref_dset = LoopingDataset(
+            FlippedMNISTSubset(config, split=split))
+    
+    def __getitem__(self, index):
+        ref_z, ref_label = self.ref_dset[index]
+        biased_z, biased_label = self.biased_dset[index]
 
         ref_z = ref_z.float() / 255.
         biased_z = biased_z.float() / 255.

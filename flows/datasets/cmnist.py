@@ -28,7 +28,7 @@ class ourMNIST(VisionDataset):
         self.root = os.path.join(args.data_dir, 'mnist/')
         mnist = datasets.MNIST(self.root, train=True if self.split in ['train', 'val'] else False, download=True)  # don't apply transformations
 
-        if split == 'train' or split == 'val':
+        if split in ['train', 'val']:
             num_train = int(0.8 * len(mnist.train_data))
             train_idxs = np.random.choice(np.arange(len(mnist.train_data)), size=num_train, replace=False)
             val_idxs = np.setdiff1d(np.arange(len(mnist.train_data)), train_idxs)
@@ -80,7 +80,7 @@ class FlippedMNIST(VisionDataset):
         self.root = os.path.join(args.data_dir, 'mnist/')
         mnist = datasets.MNIST(self.root, train=True if self.split in ['train', 'val'] else False, download=True)  # don't apply transformations
 
-        if split == 'train' or split == 'val':
+        if split in ['train', 'val']:
             num_train = int(0.8 * len(mnist.train_data))
             train_idxs = np.random.choice(np.arange(len(mnist.train_data)), size=num_train, replace=False)
             val_idxs = np.setdiff1d(np.arange(len(mnist.train_data)), train_idxs)

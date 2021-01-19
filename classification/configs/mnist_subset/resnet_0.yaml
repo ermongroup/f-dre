@@ -11,6 +11,8 @@ training:
 data:
   dataset: "MNIST"
   subset: true
+  digits: [0,7]
+  digit_percs: [0.8,0.2]
   image_size: 28
   channels: 1
   random_flip: false

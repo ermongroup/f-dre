@@ -31,12 +31,12 @@ def get_dataset(args, config):
         if config.data.x_space:
             print('using x-space for density ratio estimation')
             dataset = SplitMNIST(config, split='train')
-            # val_dataset = SplitMNIST(config, split='val')
+            val_dataset = SplitMNIST(config, split='val')
             test_dataset = SplitMNIST(config, split='test')
         else:
             print('using z-space for density ratio estimation')
             dataset = SplitEncodedMNIST(config, split='train')
-            # val_dataset = SplitEncodedMNIST(config, split='val')
+            val_dataset = SplitEncodedMNIST(config, split='val')
             test_dataset = SplitEncodedMNIST(config, split='test')
 
     elif config.data.dataset == 'CIFAR10':
@@ -81,8 +81,8 @@ def get_dataset(args, config):
         # test_dataset = Subset(dataset, test_indices)
         # dataset = Subset(dataset, train_indices)
 
-    # return dataset, val_dataset, test_dataset
-    return dataset, test_dataset
+    return dataset, val_dataset, test_dataset
+    # return dataset, test_dataset
 
 
 def logit_transform(image, lam=1e-6):

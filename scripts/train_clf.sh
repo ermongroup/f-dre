@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # PERCS=(0.1 0.25 0.5 1.0)
-IDXS=(0 1 2)
+# IDXS=(0 1 2)
+IDXS=(0)
 
 for i in "${IDXS[@]}"
 do
