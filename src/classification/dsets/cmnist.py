@@ -95,9 +95,9 @@ class FlippedMNIST(VisionDataset):
             data = mnist.test_data
             labels = mnist.test_labels
 
-        self.data, self.labels = self.initialize_data_splits(data, labels)
+        self.data, self.labels = self.initialize_data_splits(data, labels, config.data.include_all)
 
-    def initialize_data_splits(self, data, labels):
+    def initialize_data_splits(self, data, labels, include_all):
         """
         set aside a balanced number of classes for specified perc
         """
@@ -110,8 +110,8 @@ class FlippedMNIST(VisionDataset):
         new_labels = []
         for class_label in unique:
             num_samples = n_examples // n_classes
-            sub_y = labels[labels==class_label][0:num_samples]
-            sub_x = data[labels==class_label][0:num_samples]
+            sub_y = labels[labels==class_label] if include_all else labels[labels==class_label][0:num_samples] 
+            sub_x = data[labels==class_label] if include_all else data[labels==class_label][0:num_samples]
 
             # add examples
             new_labels.append(sub_y)
@@ -187,7 +187,10 @@ class MNISTSubset(ourMNIST):
             digit_idxs = torch.where(targets == digit)[0]
             
             # balanced digit split for test/val set; split by digit_percs for train
-            n_digit_samples = int(perc * n_samples_needed) if split == 'train' else int(n_samples_needed.item() // len(self.digits))
+            if not config.data.include_all:
+                n_digit_samples = int(perc * n_samples_needed) if split == 'train' else int(n_samples_needed.item() // len(self.digits))
+            else:
+                n_digit_samples = len(digit_idxs)
             digit_idxs = digit_idxs[:n_digit_samples]
             subset_idxs.extend(digit_idxs)
         
@@ -251,9 +254,9 @@ class FlippedMNISTSubset(ourMNIST):
             data = mnist.test_data
             targets = mnist.test_labels
         self.data, self.labels = self.initialize_data_splits(
-            data, targets, split)
+            data, targets, split, config.data.include_all)
 
-    def initialize_data_splits(self, data, targets, split):
+    def initialize_data_splits(self, data, targets, split, include_all):
         
         # select datapoints with desired digits
         digit_idxs = [] 
@@ -270,21 +273,22 @@ class FlippedMNISTSubset(ourMNIST):
             data_idxs = train_idxs if split == 'train' else val_idxs
             data = data[data_idxs]
             labels = labels[data_idxs]
+        
+        if not include_all:
+            # cut down dataset size and construct splits
+            max_perc_idx = torch.argmax(self.digit_percs)
+            total_samples_available = len(labels)
+            n_samples_needed = min(int(float(self.perc) * total_samples_available), sum(labels == self.digits[max_perc_idx]).item() // self.digit_percs[max_perc_idx])
 
-        # cut down dataset size and construct splits
-        max_perc_idx = torch.argmax(self.digit_percs)
-        total_samples_available = len(labels)
-        n_samples_needed = min(int(float(self.perc) * total_samples_available), sum(labels == self.digits[max_perc_idx]).item() // self.digit_percs[max_perc_idx])
-
-        subset_idxs = []
-        for digit, digit_perc in zip(self.digits, self.digit_percs):
-            digit_idxs = torch.where(labels == digit)[0]
-            # balanced digit split for test/val set; split by digit_percs for train
-            n_digit_samples = int(digit_perc * n_samples_needed) if split == 'train' else int(n_samples_needed // len(self.digits))
-            digit_idxs = digit_idxs[:n_digit_samples]
-            subset_idxs.extend(digit_idxs)
-        data = data[subset_idxs]
-        labels = labels[subset_idxs]
+            subset_idxs = []
+            for digit, digit_perc in zip(self.digits, self.digit_percs):
+                digit_idxs = torch.where(labels == digit)[0]
+                # balanced digit split for test/val set; split by digit_percs for train
+                n_digit_samples = int(digit_perc * n_samples_needed) if split == 'train' else int(n_samples_needed // len(self.digits))
+                digit_idxs = digit_idxs[:n_digit_samples]
+                subset_idxs.extend(digit_idxs)
+            data = data[subset_idxs]
+            labels = labels[subset_idxs]
         # apply reverse black/white background
         data = (255 - data)
 
@@ -303,34 +307,3 @@ class FlippedMNISTSubset(ourMNIST):
         item = item.view((-1, 784))
 
         return item, label
-
-        # """
-        # set aside a balanced number of classes for specified perc
-        # """
-
-        # # only modify perc for train set
-        # if split == 'train':
-        #     n_examples = int(len(data) * self.perc)
-        #     unique = torch.unique(labels)
-        #     n_classes = len(unique)
-
-        #     new_dset = []
-        #     new_labels = []
-        #     for class_label in unique:
-        #         num_samples = n_examples // n_classes
-        #         sub_y = labels[labels==class_label][0:num_samples]
-        #         sub_x = data[labels==class_label][0:num_samples]
-
-        #         # add examples
-        #         new_labels.append(sub_y)
-        #         new_dset.append(sub_x)
-        #     new_labels = torch.cat(new_labels)
-        #     new_dset = torch.cat(new_dset)
-        # else:
-        #     new_dset = data
-        #     new_labels = labels
-
-        # apply reverse black/white background
-        # new_dset = (255 - new_dset)
-
-        # return new_dset, new_labels

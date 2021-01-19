@@ -5,7 +5,8 @@ import torch
 import torchvision.transforms as transforms
 from dsets.flipped_mnist import (
     SplitEncodedMNIST,
-    SplitMNIST
+    SplitMNIST,
+    SplitMNISTSubset
 )
 from dsets.dataset_utils import *
 
@@ -38,7 +39,14 @@ def get_dataset(args, config):
             dataset = SplitEncodedMNIST(config, split='train')
             val_dataset = SplitEncodedMNIST(config, split='val')
             test_dataset = SplitEncodedMNIST(config, split='test')
-
+    elif config.data.dataset == 'SplitMNIST':
+        dataset = SplitMNIST(config, split='train')
+        val_dataset = SplitMNIST(config, split='val')
+        test_dataset = SplitMNIST(config, split='test')
+    elif config.data.dataset == 'SplitMNISTSubset':
+        dataset = SplitMNISTSubset(config, split='train')
+        val_dataset = SplitMNISTSubset(config, split='val')
+        test_dataset = SplitMNISTSubset(config, split='test')
     elif config.data.dataset == 'CIFAR10':
         raise NotImplementedError
         # dataset = CIFAR10(os.path.join(args.exp, 'datasets', 'cifar10'), train=True, download=True,

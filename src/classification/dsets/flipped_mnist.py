@@ -4,12 +4,14 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, Subset, TensorDataset
 from .looping import LoopingDataset
-from .cmnist import ourMNIST, FlippedMNIST
+from .cmnist import ourMNIST, FlippedMNIST, MNISTSubset, FlippedMNISTSubset
 
 
 class SplitMNIST(Dataset):
     """
     same dataset class as SplitEncodedMNIST, except operating in x-space (mostly as a sanity check)
+
+    MNIST with black and white backgrounds
     """
     def __init__(self, config, split='train'):
 
@@ -50,14 +52,14 @@ class SplitMNISTSubset(Dataset):
             FlippedMNISTSubset(config, split=split))
     
     def __getitem__(self, index):
-        ref_z, ref_label = self.ref_dset[index]
-        biased_z, biased_label = self.biased_dset[index]
+        ref_x, ref_label = self.ref_dset[index]
+        biased_x, biased_label = self.biased_dset[index]
 
-        ref_z = ref_z.float() / 255.
-        biased_z = biased_z.float() / 255.
+        ref_x = ref_x.float() / 255.
+        biased_x = biased_x.float() / 255.
 
         #TODO: eventually also return attr label in addition to ref/bias label?
-        return (ref_z, biased_z)
+        return (ref_x, biased_x)
     
     def __len__(self):
         return len(self.ref_dset) + len(self.biased_dset)

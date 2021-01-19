@@ -35,7 +35,7 @@ import seaborn as sns
 # device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
-class Classifier(BaseTrainer):
+class AttrClassifier(BaseTrainer):
     def __init__(self, args, config):
         self.args = args
         self.config = config
@@ -111,27 +111,14 @@ class Classifier(BaseTrainer):
         
         return acc
 
-    def get_preds(self, logits):
-        with torch.no_grad():
-            if self.config.loss.name == 'bce':
-                y_preds = torch.round(torch.sigmoid(logits))
-            else:
-                probs = F.softmax(logits, dim=1)
-                _, y_preds = torch.max(probs, 1)
-        return y_preds
-
     def train_epoch(self, epoch):
         # get meters ready
         loss_meter = utils.AverageMeter()
+        acc_meter = utils.AverageMeter()
 
         # train classifier
         self.model.train()
         data_tqdm = tqdm(iter(self.train_dataloader), leave=False, total=len(self.train_dataloader))
-
-        num_pos_correct = 0
-        num_pos_samples = 0
-        num_neg_correct = 0
-        num_neg_samples = 0
 
         for i, (z_ref, z_biased) in enumerate(data_tqdm):
             z = torch.cat([z_ref, z_biased])
@@ -152,12 +139,8 @@ class Classifier(BaseTrainer):
             loss_meter.update(loss.item())
 
             # check accuracy
-            y_preds = self.get_preds(logits.squeeze())
-            num_pos_samples += y.sum()
-            num_neg_samples += y.size(0) - num_pos_samples
-            num_pos_correct += (y_preds[y == 1] == y[y == 1]).sum()
-            num_neg_correct += (y_preds[y == 0] == y[y == 0]).sum()
-            acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
+            accs = self.accuracy(logits.squeeze(), y)
+            acc_meter.update(accs)
 
             # gradient update
             self.optimizer.zero_grad()
@@ -165,12 +148,12 @@ class Classifier(BaseTrainer):
             self.optimizer.step()
 
             # get summary
-            summary = dict(avg_loss=loss.item(), clf_acc=acc)
+            summary = dict(avg_loss=loss.item(), clf_acc=acc_meter.avg)
 
             if (i + 1) % self.config.training.iter_log == 0:
                 summary.update(
                     dict(avg_loss=np.round(loss.float().item(), 3),
-                        clf_acc=np.round(acc, 3)))
+                        clf_acc=np.round(acc_meter.avg, 3)))
                 print()
                 pprint(summary)
 
@@ -179,18 +162,17 @@ class Classifier(BaseTrainer):
             data_tqdm.set_description(desc)
             data_tqdm.update(z.shape[0])
         # end of training epoch
-        avg_acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
         print()
         print('Completed epoch {}: train loss: {}, train acc: {}'.format(
             epoch, 
             np.round(loss_meter.avg, 3), 
-            np.round(avg_acc, 3)))
+            np.round(acc_meter.avg, 3)))
         summary.update(dict(
             avg_loss=loss_meter.avg,
-            avg_acc=avg_acc))
+            avg_acc=acc_meter.avg))
         # pprint(summary)
 
-        return loss_meter.avg, avg_acc
+        return loss_meter.avg, acc_meter.avg
 
     def train(self):
         best = False
@@ -219,6 +201,7 @@ class Classifier(BaseTrainer):
             
             # check performance on validation set
             if val_loss <= best_loss:
+                best_loss = val_loss
                 best_acc = val_acc
                 best_epoch = epoch
                 best = True
@@ -248,12 +231,8 @@ class Classifier(BaseTrainer):
     def test(self, loader, test_type):
         # get meters ready
         loss_meter = utils.AverageMeter()
+        acc_meter = utils.AverageMeter()
         summary = {'avg_loss': 0, 'avg_acc': 0}
-
-        num_pos_samples = 0
-        num_neg_samples = 0
-        num_pos_correct = 0
-        num_neg_correct = 0
 
         # other items
         labels = []
@@ -285,26 +264,22 @@ class Classifier(BaseTrainer):
                 loss_meter.update(loss.item())
                 
                 # TODO: check accuracy between classes
-                y_preds = self.get_preds(logits.squeeze())
-                num_pos_samples += y.sum()
-                num_neg_samples += y.size(0) - num_pos_samples
-                num_pos_correct += (y_preds[y == 1] == y[y == 1]).sum()
-                num_neg_correct += (y_preds[y == 0] == y[y == 0]).sum()
+                accs = self.accuracy(logits.squeeze(), y)
+                acc_meter.update(accs)
 
                 # save items
                 labels.append(y.cpu())
                 p_y1.append(probs)
         
-        avg_acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
         # Completed running test
         print('Completed evaluation: {} loss: {}, {} acc: {}'.format(
             test_type,
             np.round(loss_meter.avg, 3), 
             test_type,
-            np.round(avg_acc, 3)))
+            np.round(acc_meter.avg, 3)))
         summary.update(
             dict(avg_loss=np.round(loss_meter.avg, 3),
-                avg_acc=np.round(avg_acc, 3)))
+                avg_acc=np.round(acc_meter.avg, 3)))
         print()
         # pprint(summary)
 
@@ -314,7 +289,7 @@ class Classifier(BaseTrainer):
         ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
         p_y1 = p_y1.data.cpu().numpy()
 
-        return loss_meter.avg, avg_acc, labels, p_y1, ratios
+        return loss_meter.avg, acc_meter.avg, labels, p_y1, ratios
 
     def clf_diagnostics(self, y_valid, valid_prob_pos, ratios, split):
             """

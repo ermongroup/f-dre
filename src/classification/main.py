@@ -52,7 +52,7 @@ def parse_args_and_config():
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
     new_config.ckpt_dir = ckpt_dir
-
+    print('new_config.out_dir: ', new_config.out_dir)
     if not args.test:
         if not args.resume_training:
             if os.path.exists(args.log):

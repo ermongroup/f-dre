@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from functools import partial
-from src.classification.models.normalizers import *
+from classification.models.normalizers import *
 
 
 def get_act(config):

@@ -22,10 +22,16 @@ CUDA_VISIBLE_DEVICES=0 python3 classifier/trainer.py --out_dir=/atlas/u/kechoi/m
 
 -----------------------------
 # REFACTORED CODE!!!!!! (START HERE)
-# try training classifier
+# try training classifier (DRE)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=Classifier --config=mnist/resnet.yaml
 
 CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=Classifier --config=mnist_subset/resnet.yaml
+
+------
+# try training classifier (attribute: 0/7 attr_digits)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=AttrClassifier --config=mnist_subset/attr_digits.yaml
+# try training classifier (attribute: background color)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=AttrClassifier --config=mnist/attr_bkgd.yaml
 
 
 -----

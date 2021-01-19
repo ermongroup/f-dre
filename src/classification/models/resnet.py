@@ -4,8 +4,8 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from functools import partial
-from src.classification.models.layers import *
-from src.classification.models.normalizers import get_normalization
+from classification.models.layers import *
+from classification.models.normalizers import get_normalization
 
 
 class ResnetClassifier(nn.Module):
