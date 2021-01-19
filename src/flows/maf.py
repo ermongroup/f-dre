@@ -45,7 +45,7 @@ parser.add_argument('--perc', type=float, help='Used with CMNIST; percentage of 
 parser.add_argument('--subset', type=bool, help='if True, uses version of MNIST that is split into (0,7)')
 parser.add_argument('--output_dir', type=str)
 # others
-parser.add_argument('--alpha', type=float, default=0.065, help='flattening coefficient')
+parser.add_argument('--alpha', type=float, default=0.06, help='flattening coefficient')
 parser.add_argument('--generate_samples', action='store_true', help='generate samples')
 parser.add_argument('--train', action='store_true', help='Train a flow.')
 parser.add_argument('--evaluate', action='store_true', help='Evaluate a flow.')
@@ -273,6 +273,8 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
     model.eval()
     dre_clf.eval()
     attr_clf.eval()
+    args.alpha = 0
+    print(args.alpha)
 
     print('generating {} samples in batches of 1000...'.format(args.n_samples))
     n_batches = int(args.n_samples // 1000)
@@ -283,11 +285,11 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
         
         # TODO: reweight the samples via dre_clf
         logits, probas = dre_clf(u.view(1000, 1, 28, 28))
-        print('flattening importance weights by alpha={}'.format(args.alpha))
+        # print('flattening importance weights by alpha={}'.format(args.alpha))
         ratios = (probas[:, 1]/probas[:, 0])**(args.alpha)
         u_hat = u * torch.sqrt(ratios).unsqueeze(1)
-        print('original u range:', u.min().item(), u.max().item())
-        print('reweighted u range:', u_hat.min().item(), u_hat.max().item())
+        # print('original u range:', u.min().item(), u.max().item())
+        # print('reweighted u range:', u_hat.min().item(), u_hat.max().item())
         
         samples, _ = model.inverse(u_hat)
         log_probs = model.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
@@ -315,8 +317,7 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
         'l2_fair_disc': fair_disc_l2,
         })
     # maybe just save some samples?
-    # filename = 'fair_samples_{}'.format(args.alpha) + '.png'
-    filename = 'test.png'
+    filename = 'fair_samples_{}'.format(args.alpha) + '.png'
     save_image(torch.from_numpy(all_samples[0:2500]), os.path.join(args.output_dir, filename), nrow=50, normalize=True)
 
 
