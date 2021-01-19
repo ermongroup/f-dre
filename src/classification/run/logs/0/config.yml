@@ -1,0 +1,42 @@
+!!python/object:argparse.Namespace
+ckpt_dir: /atlas/u/kechoi/multi-fairgen/classification/checkpoints/mnist_subset_z_perc0.1
+data: !!python/object:argparse.Namespace
+  biased_split: 0.9
+  channels: 1
+  class_idx: 20
+  dataset: MNIST
+  image_size: 28
+  num_workers: 4
+  perc: 0.1
+  random_flip: false
+  ref_split: 0.5
+  subset: true
+  test_perc: 0.1
+  train_perc: 0.8
+  x_space: false
+loss: !!python/object:argparse.Namespace
+  name: cross_entropy
+model: !!python/object:argparse.Namespace
+  batch_norm: true
+  dropout: 0.1
+  h_dim: 100
+  in_dim: 784
+  n_classes: 2
+  name: resnet
+  spectral_norm: true
+optim: !!python/object:argparse.Namespace
+  amsgrad: false
+  beta1: 0.9
+  lr: 0.0002
+  optimizer: Adam
+  weight_decay: 0.0
+out_dir: /atlas/u/kechoi/multi-fairgen/classification/results/mnist_subset_z_perc0.1
+training: !!python/object:argparse.Namespace
+  batch_size: 128
+  data_dir: /atlas/u/kechoi/multi-fairgen/data/
+  exp_id: mnist_subset_z_perc0.1
+  iter_log: 1000
+  iter_save: 100
+  n_epochs: 10
+  ngpu: 1
+  out_dir: /atlas/u/kechoi/multi-fairgen/classification/

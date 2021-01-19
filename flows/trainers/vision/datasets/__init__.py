@@ -1,2 +1,0 @@
-from .celeba import CelebADataset
-
