@@ -101,24 +101,26 @@ class FlippedMNIST(VisionDataset):
         """
         set aside a balanced number of classes for specified perc
         """
+        if not include_all:
+            n_examples = int(len(data) * self.perc)
+            unique = torch.unique(labels)
+            n_classes = len(unique)
 
-        n_examples = int(len(data) * self.perc)
-        unique = torch.unique(labels)
-        n_classes = len(unique)
+            new_dset = []
+            new_labels = []
+            for class_label in unique:
+                num_samples = n_examples // n_classes
+                sub_y = labels[labels==class_label][0:num_samples] 
+                sub_x = data[labels==class_label][0:num_samples]
 
-        new_dset = []
-        new_labels = []
-        for class_label in unique:
-            num_samples = n_examples // n_classes
-            sub_y = labels[labels==class_label] if include_all else labels[labels==class_label][0:num_samples] 
-            sub_x = data[labels==class_label] if include_all else data[labels==class_label][0:num_samples]
-
-            # add examples
-            new_labels.append(sub_y)
-            new_dset.append(sub_x)
-        new_labels = torch.cat(new_labels)
-        new_dset = torch.cat(new_dset)
-
+                # add examples
+                new_labels.append(sub_y)
+                new_dset.append(sub_x)
+            new_labels = torch.cat(new_labels)
+            new_dset = torch.cat(new_dset)
+        else:
+            new_dset = data
+            new_labels = labels
         # apply reverse black/white background
         new_dset = (255 - new_dset)
 

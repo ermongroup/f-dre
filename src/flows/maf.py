@@ -6,6 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.distributions as D
+import yaml
 import torchvision.transforms as T
 from torchvision.utils import save_image
 
@@ -26,6 +27,14 @@ from models.maf import *
 from src.classification.models.resnet import ResnetClassifier
 from src.classification.models.mlp import MLPClassifier
 import utils
+
+CHECKPOINT_DIR = '/atlas/u/madeline/multi-fairgen/src/classification/checkpoints'
+ATTR_CLFS = {
+    # attr: digits
+    'SplitMNISTSubset': os.path.join(CHECKPOINT_DIR, 'digits_attr_clf', 'model_best.pth'),
+    # attr: background color   
+    'SplitMNIST': os.path.join(CHECKPOINT_DIR,'background_attr_clf', 'model_best.pth')     
+}
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
@@ -50,17 +59,13 @@ parser.add_argument('--output_dir', default='./results/{}'.format(os.path.splite
 parser.add_argument('--results_file', default='results.txt', help='Filename where to store settings and test results.')
 parser.add_argument('--no_cuda', action='store_true', help='Do not use cuda.')
 # data
+parser.add_argument('--config', default='/mnist/attr_bkgd.yaml', help='Which dataset to use.')
 parser.add_argument('--dataset', default='toy', help='Which dataset to use.')
-<<<<<<< Updated upstream
-parser.add_argument('--digits', type=list, default=[0, 7], help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
-parser.add_argument('--digit_percs', type=list, default=[0.5, 0.5], help='Used with --digits; perc of each digit to include in dataset.')
-=======
 parser.add_argument('--perc', type=float, default=0.5, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
 parser.add_argument('--digits', type=int, nargs='+', help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
 parser.add_argument('--digit_percs', type=float, nargs='+', help='Used with --digits; perc of each digit to include in dataset.')
 parser.add_argument('--flipped_digits', type=int, nargs='+', help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
 parser.add_argument('--flipped_digit_percs', type=float, nargs='+', help='Used with --digits; perc of each digit to include in dataset.')
->>>>>>> Stashed changes
 parser.add_argument('--flip_toy_var_order', action='store_true', help='Whether to flip the toy dataset variable order to (x2, x1).')
 parser.add_argument('--seed', type=int, default=1, help='Random seed to use.')
 # model
@@ -192,9 +197,10 @@ def load_classifier(args, name):
     else:
         # TODO: load config file
         # TODO: have global paths to pre-trained attribute classifiers
-        config = config
+        with open(os.path.join('configs', args.config), 'r') as f:
+            config = yaml.load(f)
         clf = MLPClassifier(config)
-        ckpt_path = ATTR_CLFS[dataset]  # or sth similar
+        ckpt_path = ATTR_CLFS[args.dataset]  # or sth similar
     assert os.path.exists(ckpt_path)
     print('loading pre-trained DRE classifier checkpoint from {}'.format(ckpt_path))
 
@@ -529,10 +535,10 @@ if __name__ == '__main__':
             generate(model, train_dataloader.dataset.lam, args)
     if args.generate_samples:
         if 'MNIST' in args.dataset:
-            # attr_clf = load_classifier(args, 'mlp')
+            attr_clf = load_classifier(args, 'mlp')
             if not args.fair_generate:
                 generate_many_samples(model, args, attr_clf)
             else:
                 dre_clf = load_classifier(args, 'resnet')
-                # fair_generate(model, args, dre_clf, attr_clf)
-                fair_generate(model, args, dre_clf, dre_clf)
+                fair_generate(model, args, dre_clf, attr_clf)
+                # fair_generate(model, args, dre_clf, dre_clf)

@@ -200,7 +200,7 @@ class AttrClassifier(BaseTrainer):
             scheduler.step()
             
             # check performance on validation set
-            if val_loss <= best_loss:
+            if val_acc >= best_acc:
                 best_loss = val_loss
                 best_acc = val_acc
                 best_epoch = epoch
