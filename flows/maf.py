@@ -31,10 +31,12 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--perc', type=float, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
 parser.add_argument('--subset', type=bool, help='if True, uses version of MNIST that is split into (0,7)')
 # others
+parser.add_argument('--generate_samples', action='store_true', help='generate samples')
 parser.add_argument('--train', action='store_true', help='Train a flow.')
 parser.add_argument('--evaluate', action='store_true', help='Evaluate a flow.')
 parser.add_argument('--restore_file', type=str, help='Path to model to restore.')
 parser.add_argument('--encode', action='store_true', help='Save data z-encodings using a trained model.')
+parser.add_argument('--n-samples', type=int, default=50000, help='number of samples to generate after training')
 parser.add_argument('--channels', type=int, default=1, help='number of channels in image')
 parser.add_argument('--image-size', type=int, default=28, help='H/W of image')
 parser.add_argument('--generate', action='store_true', help='Generate samples from a model.')
@@ -168,6 +170,30 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
     samples = torch.clamp(samples, 0., 1.)
     filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
     save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
+
+
+@torch.no_grad()
+def generate_many_samples(model, args):
+    all_samples = []
+    model.eval()
+
+    print('generating {} samples in batches of 1000...'.format(args.n_samples))
+    n_batches = int(args.n_samples // 1000)
+    for n in range(n_batches):
+        if (n % 10 == 0) and (n > 0):
+            print('on iter {}/{}'.format(n, n_batches))
+        u = model.base_dist.sample((1000, args.n_components)).squeeze()
+        samples, _ = model.inverse(u)
+        log_probs = model.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
+        samples = samples[log_probs]
+        samples = samples.view((samples.shape[0], args.channels, args.image_size, args.image_size))
+        samples = torch.sigmoid(samples)
+        samples = torch.clamp(samples, 0., 1.)  # check if we want to multiply by 255 and transpose if we're gonna do metric stuff on here
+        all_samples.append(samples.detach().cpu().numpy())
+    all_samples = np.vstack(all_samples)
+    # np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
+    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
+    # save_image(samples, os.path.join(args.output_dir, 'samples'), nrow=n_row, normalize=True)
 
 
 @torch.no_grad()
@@ -424,8 +450,11 @@ if __name__ == '__main__':
             base_dist = train_dataloader.dataset.base_dist
             plot_sample_and_density(model, base_dist, args, ranges_density=[[-15,4],[-3,3]], ranges_sample=[[-1.5,1.5],[-3,3]])
         elif args.dataset == 'MNIST' or args.dataset == 'FlippedMNIST' or args.dataset == 'MNIST_combined':
+            generate(model, train_dataloader.dataset.lam, args)
+    if args.generate_samples:
+        if 'MNIST' in args.dataset:
             if not args.fair_generate:
-                generate(model, train_dataloader.dataset.lam, args)
+                generate_many_samples(model, args)
             else:
                 fair_generate(model, train_dataloader.dataset.lam, args)
 
