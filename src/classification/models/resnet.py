@@ -4,14 +4,14 @@ import numpy as np
 import torch.nn.functional as F
 import torch
 from functools import partial
-from models.layers import *
-from models.normalizers import get_normalization
+from src.classification.models.layers import *
+from src.classification.models.normalizers import get_normalization
 
 
 class ResnetClassifier(nn.Module):
     def __init__(self, args):
         super().__init__()
-        self.args = args
+        self.args = args  # deprecate this
         # self.norm = get_normalization(config, conditional=False)
         self.norm = nn.GroupNorm
         self.ngf = ngf = 64

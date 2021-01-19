@@ -23,6 +23,9 @@ from copy import deepcopy
 
 from data import fetch_dataloaders
 from models.maf import *
+from src.classification.models.resnet import ResnetClassifier
+from src.classification.models.mlp import MLPClassifier
+import utils
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
@@ -40,6 +43,7 @@ parser.add_argument('--n-samples', type=int, default=50000, help='number of samp
 parser.add_argument('--channels', type=int, default=1, help='number of channels in image')
 parser.add_argument('--image-size', type=int, default=28, help='H/W of image')
 parser.add_argument('--generate', action='store_true', help='Generate samples from a model.')
+parser.add_argument('--clf-ckpt', type=str, default=None, help='Checkpoint for pretrained classifier for DRE.')
 parser.add_argument('--fair-generate', action='store_true', help='Generate samples from a model using importance weights.')
 parser.add_argument('--data_dir', default='./data/', help='Location of datasets.')
 parser.add_argument('--output_dir', default='./results/{}'.format(os.path.splitext(__file__)[0]))
@@ -143,6 +147,7 @@ def evaluate(model, dataloader, epoch, args):
     print(output, file=open(args.results_file, 'a'))
     return logprob_mean, logprob_std
 
+
 @torch.no_grad()
 def generate(model, dataset_lam, args, step=None, n_row=10):
     model.eval()
@@ -180,10 +185,28 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
     save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
 
+def load_classifier(args, name):
+    if name == 'resnet':
+        clf = ResnetClassifier(args)
+    else:
+        clf = MLPClassifier(args)
+    ckpt_path = args.clf_ckpt
+    assert os.path.exists(ckpt_path)
+    print('loading pre-trained DRE classifier checkpoint from {}'.format(ckpt_path))
+
+    # load state dict
+    state_dict = torch.load(ckpt_path)['state_dict']
+    clf.load_state_dict(state_dict)
+    clf = clf.to(device)
+    return clf
+
+
 @torch.no_grad()
-def generate_many_samples(model, args):
+def generate_many_samples(model, args, clf):
     all_samples = []
+    preds = []
     model.eval()
+    clf.eval()
 
     print('generating {} samples in batches of 1000...'.format(args.n_samples))
     n_batches = int(args.n_samples // 1000)
@@ -197,40 +220,68 @@ def generate_many_samples(model, args):
         samples = samples.view((samples.shape[0], args.channels, args.image_size, args.image_size))
         samples = torch.sigmoid(samples)
         samples = torch.clamp(samples, 0., 1.)  # check if we want to multiply by 255 and transpose if we're gonna do metric stuff on here
+
+        # get classifier predictions
+        logits, probas = clf(samples.view(len(samples), -1))
+        _, pred = torch.max(probas, 1)
+
+        # save things
+        preds.append(pred.detach().cpu().numpy())
         all_samples.append(samples.detach().cpu().numpy())
     all_samples = np.vstack(all_samples)
+    preds = np.hstack(preds)
+    fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
     # np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
     np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
-    # save_image(samples, os.path.join(args.output_dir, 'samples'), nrow=n_row, normalize=True)
+    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
+        **{
+        'preds': preds,
+        'l2_fair_disc': fair_disc_l2,
+        })
 
 
 @torch.no_grad()
-def fair_generate(model, dataset_lam, args, step=None, n_row=10):
+def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
+    all_samples = []
+    preds = []
+
     model.eval()
-    """
-    TODO: this probably doesn't need to be its own function
-    TODO: need to modify this function
-    (1) need to load in trained classifier
-    (2) need to use classifier for generation
-    """
-    # unconditional model
-    u = model.base_dist.sample((n_row**2, args.n_components)).squeeze()
-    samples, _ = model.inverse(u)
-    log_probs = model.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
-    samples = samples[log_probs]
+    dre_clf.eval()
+    attr_clf.eval()
 
-    # TODO: load classifier
-    # TODO: get weights
-    # TODO: get reweighted samples
+    print('generating {} samples in batches of 1000...'.format(args.n_samples))
+    n_batches = int(args.n_samples // 1000)
+    for n in range(n_batches):
+        if (n % 10 == 0) and (n > 0):
+            print('on iter {}/{}'.format(n, n_batches))
+        u = model.base_dist.sample((1000, args.n_components)).squeeze()
+        
+        # TODO: reweight the samples via dre_clf
 
-    # convert and save images
-    samples = samples.view((samples.shape[0], args.channels, args.image_size, args.image_size))
-    samples = torch.sigmoid(samples)
-    samples = torch.clamp(samples, 0., 1.)
+        samples, _ = model.inverse(u)
+        log_probs = model.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
+        samples = samples[log_probs]
+        samples = samples.view((samples.shape[0], args.channels, args.image_size, args.image_size))
+        samples = torch.sigmoid(samples)
+        samples = torch.clamp(samples, 0., 1.)  # check if we want to multiply by 255 and transpose if we're gonna do metric stuff on here
 
-    # save images
-    filename = 'fair_generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
-    save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
+        # get classifier predictions
+        logits, probas = attr_clf(samples.view(len(samples), -1))
+        _, pred = torch.max(probas, 1)
+
+        # save things
+        preds.append(pred.detach().cpu().numpy())
+        all_samples.append(samples.detach().cpu().numpy())
+    all_samples = np.vstack(all_samples)
+    preds = np.hstack(preds)
+    fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
+    # np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
+    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
+    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
+        **{
+        'preds': preds,
+        'l2_fair_disc': fair_disc_l2,
+        })
 
 
 def save_encodings(model, train_loader, val_loader, test_loader, model_name, data_dir, dataset):
@@ -460,9 +511,9 @@ if __name__ == '__main__':
             generate(model, train_dataloader.dataset.lam, args)
     if args.generate_samples:
         if 'MNIST' in args.dataset:
+            attr_clf = load_classifier(args, 'mlp')
             if not args.fair_generate:
-                generate_many_samples(model, args)
+                generate_many_samples(model, args, attr_clf)
             else:
-                fair_generate(model, train_dataloader.dataset.lam, args)
-
-
+                dre_clf = load_classifier(args, 'resnet')
+                fair_generate(model, args, dre_clf, attr_clf)

@@ -7,13 +7,13 @@ class MLPClassifier(nn.Module):
   """
   simple MLP classifier (e.g. for classifying in z-space)
   """
-  def __init__(self, args):
+  def __init__(self, config):
       super(MLPClassifier, self).__init__()
-      self.args = args
-      self.h_dim = args.h_dim
-      self.n_classes = args.n_classes
-      self.in_dim = args.pixels
-      self.dropout = nn.Dropout(args.dropout)
+      self.config = config
+      self.h_dim = config.model.h_dim
+      self.n_classes = config.model.n_classes
+      self.in_dim = config.model.in_dim
+      self.dropout = nn.Dropout(config.model.dropout)
       self.bn = nn.BatchNorm1d(self.h_dim)
 
       self.fc1 = nn.Linear(self.in_dim, self.h_dim)
