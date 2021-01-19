@@ -9,6 +9,7 @@ import torch.distributions as D
 import yaml
 import torchvision.transforms as T
 from torchvision.utils import save_image
+from torch.distributions import Normal
 
 import matplotlib
 matplotlib.use('Agg')
@@ -31,9 +32,9 @@ import utils
 CHECKPOINT_DIR = '/atlas/u/madeline/multi-fairgen/src/classification/checkpoints'
 ATTR_CLFS = {
     # attr: digits
-    'SplitMNISTSubset': os.path.join(CHECKPOINT_DIR, 'digits_attr_clf', 'model_best.pth'),
+    'digit': os.path.join(CHECKPOINT_DIR, 'digits_attr_clf', 'model_best.pth'),
     # attr: background color   
-    'SplitMNIST': os.path.join(CHECKPOINT_DIR,'background_attr_clf', 'model_best.pth')     
+    'background': os.path.join(CHECKPOINT_DIR,'background_attr_clf', 'model_best.pth')     
 }
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -42,7 +43,9 @@ parser = argparse.ArgumentParser()
 # action
 parser.add_argument('--perc', type=float, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
 parser.add_argument('--subset', type=bool, help='if True, uses version of MNIST that is split into (0,7)')
+parser.add_argument('--output_dir', type=str)
 # others
+parser.add_argument('--alpha', type=float, default=0.065, help='flattening coefficient')
 parser.add_argument('--generate_samples', action='store_true', help='generate samples')
 parser.add_argument('--train', action='store_true', help='Train a flow.')
 parser.add_argument('--evaluate', action='store_true', help='Evaluate a flow.')
@@ -55,13 +58,11 @@ parser.add_argument('--generate', action='store_true', help='Generate samples fr
 parser.add_argument('--clf-ckpt', type=str, default=None, help='Checkpoint for pretrained classifier for DRE.')
 parser.add_argument('--fair-generate', action='store_true', help='Generate samples from a model using importance weights.')
 parser.add_argument('--data_dir', default='./data/', help='Location of datasets.')
-parser.add_argument('--output_dir', default='./results/{}'.format(os.path.splitext(__file__)[0]))
 parser.add_argument('--results_file', default='results.txt', help='Filename where to store settings and test results.')
 parser.add_argument('--no_cuda', action='store_true', help='Do not use cuda.')
 # data
 parser.add_argument('--config', default='/mnist/attr_bkgd.yaml', help='Which dataset to use.')
 parser.add_argument('--dataset', default='toy', help='Which dataset to use.')
-parser.add_argument('--perc', type=float, default=0.5, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
 parser.add_argument('--digits', type=int, nargs='+', help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
 parser.add_argument('--digit_percs', type=float, nargs='+', help='Used with --digits; perc of each digit to include in dataset.')
 parser.add_argument('--flipped_digits', type=int, nargs='+', help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
@@ -190,17 +191,29 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
     save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
 
+def dict2namespace(config):
+    namespace = argparse.Namespace()
+    for key, value in config.items():
+        if isinstance(value, dict):
+            new_value = dict2namespace(value)
+        else:
+            new_value = value
+        setattr(namespace, key, new_value)
+    return namespace
+
+
 def load_classifier(args, name):
     if name == 'resnet':
         clf = ResnetClassifier(args)
         ckpt_path = args.clf_ckpt
     else:
-        # TODO: load config file
-        # TODO: have global paths to pre-trained attribute classifiers
-        with open(os.path.join('configs', args.config), 'r') as f:
+        with open(os.path.join('src/classification/configs', args.config), 'r') as f:
             config = yaml.load(f)
+        config = dict2namespace(config)
         clf = MLPClassifier(config)
-        ckpt_path = ATTR_CLFS[args.dataset]  # or sth similar
+        # mnist_attr = 'digit' if args.subset else 'background'
+        mnist_attr = 'background'
+        ckpt_path = ATTR_CLFS[mnist_attr]
     assert os.path.exists(ckpt_path)
     print('loading pre-trained DRE classifier checkpoint from {}'.format(ckpt_path))
 
@@ -247,13 +260,7 @@ def generate_many_samples(model, args, clf, n_row=10):
         'preds': preds,
         'l2_fair_disc': fair_disc_l2,
         })
-    # np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
-    # np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
-    #     **{
-    #     'preds': preds,
-    #     'l2_fair_disc': fair_disc_l2,
-    #     })
-    # maybe just save some samples?
+    # maybe just save some samples just for visualizations?
     filename = 'samples'+ '.png'
     save_image(all_samples[0:100], os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
@@ -275,14 +282,13 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
         u = model.base_dist.sample((1000, args.n_components)).squeeze().to(device)
         
         # TODO: reweight the samples via dre_clf
-        from torch.distributions import Normal
         logits, probas = dre_clf(u.view(1000, 1, 28, 28))
-        alpha = 0.065
-        ratios = (probas[:, 1]/probas[:, 0])**(alpha)
+        print('flattening importance weights by alpha={}'.format(args.alpha))
+        ratios = (probas[:, 1]/probas[:, 0])**(args.alpha)
         u_hat = u * torch.sqrt(ratios).unsqueeze(1)
-        # u_hat = Normal(0, torch.sqrt(ratios)).sample((1000, args.n_components)).squeeze()
-        print('original u range:', u.min(), u.max())
-        print('reweighted u range:', u_hat.min(), u_hat.max())
+        print('original u range:', u.min().item(), u.max().item())
+        print('reweighted u range:', u_hat.min().item(), u_hat.max().item())
+        
         samples, _ = model.inverse(u_hat)
         log_probs = model.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
         samples = samples[log_probs]
@@ -300,17 +306,18 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
     all_samples = np.vstack(all_samples)
     preds = np.hstack(preds)
     fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
+    print('prop of 1s:', np.sum(preds)/len(preds))
+    print('L2 fairness discrepancy is: {}'.format(fair_disc_l2))
     np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
-    
-    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'samples'), **{'x': all_samples})
-    np.savez(os.path.join('/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc{}/'.format(args.perc), 'metrics'), 
+    np.savez(os.path.join(args.output_dir, 'metrics'), 
         **{
         'preds': preds,
         'l2_fair_disc': fair_disc_l2,
         })
     # maybe just save some samples?
-    filename = 'fair_samples_{}'.format(alpha) + '.png'
-    save_image(torch.from_numpy(all_samples[0:100]), os.path.join('/atlas/u/kechoi/multi-fairgen/src/flows/results/subset_maf_perc{}/'.format(args.perc), filename), nrow=n_row, normalize=True)
+    # filename = 'fair_samples_{}'.format(args.alpha) + '.png'
+    filename = 'test.png'
+    save_image(torch.from_numpy(all_samples[0:2500]), os.path.join(args.output_dir, filename), nrow=50, normalize=True)
 
 
 def save_encodings(model, train_loader, val_loader, test_loader, model_name, data_dir, dataset):
@@ -513,12 +520,13 @@ if __name__ == '__main__':
         optimizer.load_state_dict(state['optimizer_state'])
         args.start_epoch = state['epoch'] + 1
         # set up paths
-        args.output_dir = os.path.dirname(args.restore_file)
+        # args.output_dir = os.path.dirname(args.restore_file)
     args.results_file = os.path.join(args.output_dir, args.results_file)
+    print('saving outputs in {}'.format(args.output_dir))
 
-    print('Loaded settings and model:')
-    print(pprint.pformat(args.__dict__))
-    print(model)
+    # print('Loaded settings and model:')
+    # print(pprint.pformat(args.__dict__))
+    # print(model)
     # print(pprint.pformat(args.__dict__), file=open(args.results_file, 'a'))
     # print(model, file=open(args.results_file, 'a'))
 
