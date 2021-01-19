@@ -219,9 +219,9 @@ class FlippedMNISTSubset(ourMNIST):
 
 
         # list of digits to include
-        self.digits = torch.Tensor(args.digits)
+        self.digits = torch.Tensor(args.flipped_digits)
         # digit_percs[i] = what % of the dataset digits[i] should make up
-        self.digit_percs = torch.Tensor(args.digit_percs)
+        self.digit_percs = torch.Tensor(args.flipped_digit_percs)
 
         mnist = datasets.MNIST(self.root, train=True if self.split != 'test' else False, download=True)
         # get correct data split

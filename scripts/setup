@@ -7,5 +7,7 @@ python maf.py --train \
             --hidden_size=1024 \
             --dataset='MNISTSubset_combined' \
             --digits=[0, 7] \
-            --digit_percs=[0.2, 0.8]
+            --digit_percs=[0.2, 0.8] \
+            --flipped_digits=[0, 7] \
+            --flipped_digit_percs=[0.5, 0.5] 
     

@@ -47,8 +47,16 @@ parser.add_argument('--results_file', default='results.txt', help='Filename wher
 parser.add_argument('--no_cuda', action='store_true', help='Do not use cuda.')
 # data
 parser.add_argument('--dataset', default='toy', help='Which dataset to use.')
+<<<<<<< Updated upstream
 parser.add_argument('--digits', type=list, default=[0, 7], help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
 parser.add_argument('--digit_percs', type=list, default=[0.5, 0.5], help='Used with --digits; perc of each digit to include in dataset.')
+=======
+parser.add_argument('--perc', type=float, default=0.5, help='Used with CMNIST; percentage of reference dataset size relative to original dataset')
+parser.add_argument('--digits', type=int, nargs='+', help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
+parser.add_argument('--digit_percs', type=float, nargs='+', help='Used with --digits; perc of each digit to include in dataset.')
+parser.add_argument('--flipped_digits', type=int, nargs='+', help='Used with FLippedMNISTSubset/MNISTSubset; which digits to include in dataset.')
+parser.add_argument('--flipped_digit_percs', type=float, nargs='+', help='Used with --digits; perc of each digit to include in dataset.')
+>>>>>>> Stashed changes
 parser.add_argument('--flip_toy_var_order', action='store_true', help='Whether to flip the toy dataset variable order to (x2, x1).')
 parser.add_argument('--seed', type=int, default=1, help='Random seed to use.')
 # model
@@ -371,7 +379,6 @@ def plot_sample_and_density(model, target_dist, args, ranges_density=[[-5,20],[-
 if __name__ == '__main__':
 
     args = parser.parse_args()
-
     # setup file ops
     if not os.path.isdir(args.output_dir):
         os.makedirs(args.output_dir)
