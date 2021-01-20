@@ -17,13 +17,15 @@ class ourMNIST(VisionDataset):
     """
     def __init__(self,
                 args,
+                config,
                 split='train',
                 transform=None, target_transform=None, load_in_mem=False,
                 download=True, **kwargs):
         super(ourMNIST, self).__init__(args.data_dir)
 
+        self.config = config
         self.split = split
-        self.perc = args.perc
+        self.perc = self.config.data.perc
         self.lam = 1e-6
         self.root = os.path.join(args.data_dir, 'mnist/')
         mnist = datasets.MNIST(self.root, train=True if self.split in ['train', 'val'] else False, download=True)  # don't apply transformations
@@ -69,13 +71,15 @@ class FlippedMNIST(VisionDataset):
     '''
     def __init__(self,
                 args,
+                config,
                 split='train',
                 transform=None, target_transform=None, load_in_mem=False,
                 download=True, **kwargs):
         super(FlippedMNIST, self).__init__(args.data_dir)
 
+        self.config = config
         self.split = split
-        self.perc = args.perc
+        self.perc = config.data.perc
         self.lam = 1e-6
         self.root = os.path.join(args.data_dir, 'mnist/')
         mnist = datasets.MNIST(self.root, train=True if self.split in ['train', 'val'] else False, download=True)  # don't apply transformations
@@ -150,11 +154,13 @@ class MNISTSubset(ourMNIST):
     '''
     def __init__(self,
                 args,
+                config,
                 split='train',
                 transform=None, target_transform=None, load_in_mem=False,
                 download=True, **kwargs):
         super(MNISTSubset, self).__init__(
                 args, 
+                config,
                 split=split,
                 transform=transform, 
                 target_transform=target_transform, 
@@ -162,11 +168,12 @@ class MNISTSubset(ourMNIST):
                 download=download)
 
 
+        self.config = config
         mnist = datasets.MNIST(self.root, train=True if (self.split != 'test')  else False, download=True)  # don't apply transformations yet
         # list of digits to include
-        self.digits = torch.Tensor(args.digits)
+        self.digits = torch.Tensor(self.config.data.digits)
         # digit_percs[i] = what % of the dataset digits[i] should make up
-        self.digit_percs = torch.Tensor(args.digit_percs)
+        self.digit_percs = torch.Tensor(self.config.data.digit_percs)
         max_perc_idx = torch.argmax(self.digit_percs)
 
         # get correct data split
@@ -206,11 +213,13 @@ class FlippedMNISTSubset(ourMNIST):
     '''
     def __init__(self,
                 args,
+                config,
                 split='train',
                 transform=None, target_transform=None, load_in_mem=False,
                 download=True, **kwargs):
         super(FlippedMNISTSubset, self).__init__(
-                args, 
+                args,
+                config, 
                 split=split,
                 transform=transform, 
                 target_transform=target_transform, 
@@ -219,9 +228,10 @@ class FlippedMNISTSubset(ourMNIST):
 
 
         # list of digits to include
-        self.digits = torch.Tensor(args.flipped_digits)
+        self.config = config
+        self.digits = torch.Tensor(self.config.data.flipped_digits)
         # digit_percs[i] = what % of the dataset digits[i] should make up
-        self.digit_percs = torch.Tensor(args.flipped_digit_percs)
+        self.digit_percs = torch.Tensor(self.config.data.flipped_digit_percs)
 
         mnist = datasets.MNIST(self.root, train=True if self.split != 'test' else False, download=True)
         # get correct data split
@@ -270,34 +280,3 @@ class FlippedMNISTSubset(ourMNIST):
         data = (255 - data)
 
         return data, labels
-
-        # """
-        # set aside a balanced number of classes for specified perc
-        # """
-
-        # # only modify perc for train set
-        # if split == 'train':
-        #     n_examples = int(len(data) * self.perc)
-        #     unique = torch.unique(labels)
-        #     n_classes = len(unique)
-
-        #     new_dset = []
-        #     new_labels = []
-        #     for class_label in unique:
-        #         num_samples = n_examples // n_classes
-        #         sub_y = labels[labels==class_label][0:num_samples]
-        #         sub_x = data[labels==class_label][0:num_samples]
-
-        #         # add examples
-        #         new_labels.append(sub_y)
-        #         new_dset.append(sub_x)
-        #     new_labels = torch.cat(new_labels)
-        #     new_dset = torch.cat(new_dset)
-        # else:
-        #     new_dset = data
-        #     new_labels = labels
-
-        # apply reverse black/white background
-        # new_dset = (255 - new_dset)
-
-        # return new_dset, new_labels

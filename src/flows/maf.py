@@ -1,6 +1,7 @@
 """
 Masked Autoregressive Flow for Density Estimation
 arXiv:1705.07057v4
+(DEPRECATED -> see trainers/flow.py)
 """
 import torch
 import torch.nn as nn
