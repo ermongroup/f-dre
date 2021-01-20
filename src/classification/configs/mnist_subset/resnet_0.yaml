@@ -4,8 +4,8 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "real_mnist_subset_z_perc0.1"
-  out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/"
+  exp_id: "test_jan19"
+  out_dir: "/atlas/u/madeline/multi-fairgen/src/classification/results"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
 data:

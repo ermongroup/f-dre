@@ -3,12 +3,12 @@ import numpy as np
 
 import torch
 import torchvision.transforms as transforms
-from dsets.flipped_mnist import (
+from .flipped_mnist import (
     SplitEncodedMNIST,
     SplitMNIST,
     SplitMNISTSubset
 )
-from dsets.dataset_utils import *
+from .dataset_utils import *
 
 
 def get_dataset(args, config):

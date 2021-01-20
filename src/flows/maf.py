@@ -2,6 +2,8 @@
 Masked Autoregressive Flow for Density Estimation
 arXiv:1705.07057v4
 """
+
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,7 +17,9 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
-import os
+import sys, os
+# for module imports:
+sys.path.append(os.path.abspath(os.getcwd()))
 import math
 import argparse
 import pprint

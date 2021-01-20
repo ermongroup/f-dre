@@ -41,12 +41,6 @@ class ourMNIST(VisionDataset):
             self.data = mnist.test_data
             self.labels = mnist.test_labels
 
-    def _data_transform(self, x):
-        # performs dequantization, rescaling, then logit transform
-        x = (x + torch.rand(x.size())) / 256.
-        x = logit_transform(x, self.lam)
-        return x
-
     def __getitem__(self, index):
 
         # get anchor data points
@@ -56,7 +50,6 @@ class ourMNIST(VisionDataset):
 
         # dequantize input
         # (TODO: maybe this won't work out of the box without rng)
-        item = self._data_transform(item)
         item = item.view((-1, 784))
 
         return item, label
@@ -126,12 +119,6 @@ class FlippedMNIST(VisionDataset):
 
         return new_dset, new_labels
 
-    def _data_transform(self, x):
-        # performs dequantization, rescaling, then logit transform
-        x = (x + torch.rand(x.size())) / 256.
-        x = logit_transform(x, self.lam)
-        return x
-
     def __getitem__(self, index):
 
         # get anchor data points
@@ -141,7 +128,6 @@ class FlippedMNIST(VisionDataset):
 
         # dequantize input
         # (TODO: maybe this won't work out of the box without rng)
-        item = self._data_transform(item)
         item = item.view((-1, 784))
 
         return item, label
@@ -218,7 +204,6 @@ class MNISTSubset(ourMNIST):
 
         # dequantize input
         # (TODO: maybe this won't work out of the box without rng)
-        item = self._data_transform(item)
         item = item.view((-1, 784))
 
         return item, label
@@ -305,7 +290,6 @@ class FlippedMNISTSubset(ourMNIST):
 
         # dequantize input
         # (TODO: maybe this won't work out of the box without rng)
-        item = self._data_transform(item)
         item = item.view((-1, 784))
 
         return item, label
