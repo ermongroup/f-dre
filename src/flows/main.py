@@ -11,6 +11,12 @@ import torch.utils.tensorboard as tb
 
 from trainers.flow import Flow
 # from trainers.classifier import Classifier
+import getpass
+import wandb
+
+WANDB = {
+    'kechoi': 'kristychoi',
+}
 
 torch.set_printoptions(sci_mode=False)
 
@@ -85,6 +91,15 @@ def parse_args_and_config():
     with open(os.path.join("src/flows/configs", args.config), "r") as f:
         config = yaml.safe_load(f)
     new_config = dict2namespace(config)
+
+    # set up wandb
+    wandb.init(
+        project='multi-fairgen', 
+        entity=WANDB[getpass.getuser()], 
+        name=new_config.training.exp_id, 
+        config=new_config, 
+        sync_tensorboard=True,
+    )
 
     tb_path = os.path.join(args.exp, "tensorboard", args.doc)
 

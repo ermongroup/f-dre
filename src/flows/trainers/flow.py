@@ -34,6 +34,8 @@ from torchvision import datasets, transforms
 import torch.utils.data as data_utils
 from torchvision.utils import save_image
 
+import wandb
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -140,6 +142,13 @@ class Flow(object):
                 x = x.view(x.shape[0], -1).to(self.device)
                 # loss = -model.module.log_prob(x, y if self.config.model.cond_label_size else None).mean(0)
                 loss = -model.module.log_prob(x, y=None).mean(0)
+                # get summary to log to wandb
+                summary = dict(
+                    train_loss=loss.item(),
+                    epoch=epoch,
+                    batch=i
+                )
+                wandb.log(summary)
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -157,6 +166,12 @@ class Flow(object):
             # now evaluate and save metrics/checkpoints
             eval_logprob, _ = self.test(
                 model, test_dataloader, epoch, self.args)
+            # get summary to log to wandb
+            summary = dict(
+                test_logp=eval_logprob.item(),
+                epoch=epoch,
+            )
+            wandb.log(summary)
             # save training checkpoint
             torch.save({
                 'epoch': epoch,
@@ -243,6 +258,8 @@ class Flow(object):
         samples = torch.clamp(samples, 0., 1.)
         filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
         save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
+        # log generations to wandb
+        wandb.log({"samples" : [wandb.Image(i) for i in samples[0:40]]})
 
     @torch.no_grad()
     def generate_samples(self, model):

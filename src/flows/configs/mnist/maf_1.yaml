@@ -4,7 +4,7 @@ training:
   ngpu: 1
   log_interval: 100
   iter_save: 100
-  exp_id: "mnist_perc0.1"
+  exp_id: "mnist_perc0.25"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/flows/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
@@ -17,7 +17,7 @@ sampling:
 data:
   dataset: "MNIST_combined"
   subset: false
-  perc: 0.1
+  perc: 0.25
   digits: [0,7]
   digit_percs: [0.2, 0.8]
   flipped_digits: [0, 7]

@@ -1,26 +1,17 @@
-# train the flow
-CUDA_VISIBLE_DEVICES=0 python src/flows/maf.py --train --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/new_subset_maf_perc0.5' --model='maf' --dataset='MNISTSubset_combined' --hidden_size=1024 --perc=0.5 --subset=True --digits 0 7 --digit_percs 0.2 0.8 --flipped_digits 0 7 --flipped_digit_percs 0.5 0.5 --n_epochs=200 
-
-CUDA_VISIBLE_DEVICES=1 python src/flows/maf.py --train --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/new_subset_maf_perc0.25' --model='maf' --dataset='MNISTSubset_combined' --hidden_size=1024 --perc=0.25 --subset=True --digits 0 7 --digit_percs 0.2 0.8 --flipped_digits 0 7 --flipped_digit_percs 0.5 0.5 --n_epochs=200 
-
-# encode
-CUDA_VISIBLE_DEVICES=0 python src/flows/maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/new_subset_maf_perc0.1' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/kechoi/multi-fairgen/src/flows/results/new_subset_maf_perc0.1/best_model_checkpoint.pt --encode --perc=0.1 --subset=True --digits 0 7 --digit_percs 0.2 0.8 --flipped_digits 0 7 --flipped_digit_percs 0.5 0.5
-
-# DRE classifier
-CUDA_VISIBLE_DEVICES=0 python3 src/classification/main.py --trainer=Classifier --config=mnist_subset/resnet_0.yaml
-
-# fair generation
-CUDA_VISIBLE_DEVICES=0 python src/flows/maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/real_subset_maf_perc0.1' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/kechoi/multi-fairgen/src/flows/results/new_subset_maf_perc0.1/best_model_checkpoint.pt --subset=True --perc=0.1 --clf-ckpt=/atlas/u/kechoi/multi-fairgen/src/classification/checkpoints/real_mnist_subset_z_perc0.1/model_best.pth --generate_samples --fair-generate --alpha=0.06 --digits 0 7 --digit_percs 0.2 0.8 --flipped_digit_percs 0.5 0.5 --flipped_digits 0 7 --config mnist/attr_bkgd.yaml --n-samples=5000 
-
-
-
---------------------
 ### cleaned up flow
 (training)
-CUDA_VISIBLE_DEVICES=0 python3 src/flows/main.py --config mnist/maf.yaml  --exp test_0.1 --doc test_0.1 --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/test_0.1'
+CUDA_VISIBLE_DEVICES=0 python3 src/flows/main.py --config mnist/maf.yaml  --exp mnist_perc0.1 --doc mnist_perc0.1 --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/mnist_perc0.1'
+
+CUDA_VISIBLE_DEVICES=1 python3 src/flows/main.py --config mnist/maf_1.yaml  --exp mnist_perc0.25 --doc mnist_perc0.25 --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/mnist_perc0.25'
 
 (encoding)
-CUDA_VISIBLE_DEVICES=0 python3 src/flows/main.py --config mnist/maf.yaml  --exp test_0.1 --doc test_0.1 --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/test_0.1' --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/new_subset_maf_perc0.1/ --sample --encode_z
+CUDA_VISIBLE_DEVICES=0 python3 src/flows/main.py --config mnist/maf.yaml  --exp mnist_perc0.1 --doc mnist_perc0.1 --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/mnist_perc0.1' --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/mnist_perc0.1/ --sample --encode_z
 
 (sampling)
-CUDA_VISIBLE_DEVICES=0 python3 src/flows/main.py --config mnist/maf.yaml  --exp test_0.1 --doc test_0.1 --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/test_0.1' --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/new_subset_maf_perc0.1/ --reweight --clf_ckpt=/atlas/u/kechoi/multi-fairgen/src/classification/checkpoints/real_mnist_subset_z_perc0.1/model_best.pth --sample --fair_generate
+CUDA_VISIBLE_DEVICES=0 python3 src/flows/main.py --config mnist/maf.yaml  --exp mnist_perc0.1 --doc mnist_perc0.1 --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/mnist_perc0.1' --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/mnist_perc0.1/ --reweight --clf_ckpt=/atlas/u/kechoi/multi-fairgen/src/classification/checkpoints/mnist_perc0.1/model_best.pth --sample --fair_generate
+
+
+
+----
+# classification (black/white background)
+CUDA_VISIBLE_DEVICES=0 python3 src/classification/main.py --trainer=Classifier --config=mnist/resnet_0.yaml

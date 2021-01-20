@@ -30,6 +30,7 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=Classifier --config=mnist_subse
 ------
 # try training classifier (attribute: 0/7 attr_digits)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=AttrClassifier --config=mnist_subset/attr_digits.yaml
+
 # try training classifier (attribute: background color)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=AttrClassifier --config=mnist/attr_bkgd.yaml
 
