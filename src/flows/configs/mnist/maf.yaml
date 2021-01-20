@@ -11,7 +11,7 @@ training:
 sampling:
   generate: true
   fair: true
-  n_samples: 50000
+  n_samples: 3000
   encode: false
 
 data:

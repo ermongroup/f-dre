@@ -309,7 +309,7 @@ class Flow(object):
             if not os.path.exists(os.path.join(args.data_dir, 'encodings', data_type)):
                 os.makedirs(os.path.join(args.data_dir, 'encodings', data_type))
             # TODO: make sure this lines up with previous trained flow!!!
-            save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_mnist_z_perc{}_test'.format(model_name, split, self.config.data.perc))
+            save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_mnist_z_perc{}'.format(model_name, split, self.config.data.perc))
             ys = []
             zs = []
             d_ys = []
@@ -326,12 +326,12 @@ class Flow(object):
             print(f'Encoding of mnist {split} set completed.')
 
         for split, loader in zip(('train', 'val', 'test'), (train_cmnist, val_cmnist, test_cmnist)):
-            save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_cmnist_z_perc{}_test'.format(model_name, split, self.config.data.perc))
+            save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_cmnist_z_perc{}'.format(model_name, split, self.config.data.perc))
             ys = []
             zs = []
             d_ys = []
             for i, (x,y) in enumerate(loader):
-                x = x.to(self.device)
+                x = x.to(self.dfevice)
                 z, _ = model(x.squeeze())
                 zs.append(z.detach().cpu().numpy())
                 ys.append(y.detach().numpy())
@@ -345,7 +345,7 @@ class Flow(object):
         print('Done encoding all x')
 
     @torch.no_grad()
-    def fair_generate(self, args, model):
+    def fair_generate(self, args, model, n_row=10):
         from torch.distributions import Categorical
 
         all_samples = []
@@ -363,7 +363,7 @@ class Flow(object):
         for n in range(20):  # HACK
             if (n % 5 == 0) and (n > 0):
                 print('on iter {}/{}'.format(n, 20))
-            u = model.module.base_dist.sample((1000, self.config.data.n_components)).squeeze().to(device)
+            u = model.module.base_dist.sample((1000, self.config.model.n_components)).squeeze().to(self.device)
             
             # TODO: reweight the samples via dre_clf
             logits, probas = self.dre_clf(u.view(1000, 1, 28, 28))
@@ -378,7 +378,7 @@ class Flow(object):
             samples = samples[log_probs]
             samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
             samples = torch.sigmoid(samples)
-            samples = torch.clamp(samples, 0., 1.)  # check if we want to multiply by 255 and transpose if we're gonna do metric stuff on here
+            samples = torch.clamp(samples, 0., 1.)
 
             # get classifier predictions
             logits, probas = self.attr_clf(samples.view(len(samples), -1))

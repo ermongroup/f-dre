@@ -68,11 +68,13 @@ def parse_args_and_config():
     parser.add_argument('--data_dir', default='./data/', help='Location of datasets.')
     parser.add_argument('--output_dir', default='./data/', help='Location of saved outputs.')
     parser.add_argument('--restore_file', default=None, help='If restoring a pretrained checkpoint, path to saved model')
+    parser.add_argument('--clf_ckpt', default=None, help='pre-trained DRE classifier checkpoint')
     # NOTE: this is specific to reweighting
     parser.add_argument('--encode_z', action='store_true')
     parser.add_argument('--classify', action='store_true')
     parser.add_argument('--reweight', action='store_true')
     parser.add_argument('--generate_samples', action='store_true')
+    parser.add_argument('--fair_generate', action='store_true')
 
     args = parser.parse_args()
     args.log_path = os.path.join(args.exp, "logs", args.doc)
