@@ -72,6 +72,7 @@ def parse_args_and_config():
     parser.add_argument('--encode_z', action='store_true')
     parser.add_argument('--classify', action='store_true')
     parser.add_argument('--reweight', action='store_true')
+    parser.add_argument('--generate_samples', action='store_true')
 
     args = parser.parse_args()
     args.log_path = os.path.join(args.exp, "logs", args.doc)
@@ -151,7 +152,7 @@ def parse_args_and_config():
             if not os.path.exists(args.image_folder):
                 os.makedirs(args.image_folder)
             else:
-                if not (args.fid or args.interpolation):
+                if not args.fid:
                     overwrite = False
                     if args.ni:
                         overwrite = True
@@ -208,7 +209,7 @@ def main():
         # else:
         trainer = Flow(args, config)
         if args.sample:
-            trainer.sample()
+            trainer.sample(args)
         elif args.test:
             trainer.test()
             # if not args.classify:

@@ -69,7 +69,7 @@ class Flow(object):
     def get_model(self):
         # TODO: do something about these args
         if self.config.model.name == 'maf':
-            model = MAF(self.config.model.n_blocks, self.config.model.input_size, self.config.model.hidden_size, self.config.model.n_hidden, self.config.model.cond_label_size, self.config.model.activation_fn, self.config.model.input_order, batch_norm=not self.config.model.no_batch_norm)
+            model = MAF(self.config.model.n_blocks, self.config.model.input_size, self.config.model.hidden_size, self.config.model.n_hidden, None, self.config.model.activation_fn, self.config.model.input_order, batch_norm=not self.config.model.no_batch_norm)
         else:
             raise ValueError('Unrecognized model.')
         return model
@@ -201,8 +201,8 @@ class Flow(object):
         print('restoring checkpoint from {}'.format(args.restore_file))
         state = torch.load(os.path.join(args.restore_file, "best_model_checkpoint.pt"), map_location=self.device)
         model = model.to(self.config.device)
-        model = torch.nn.DataParallel(model)
         model.load_state_dict(state['model_state'], strict=True)
+        model = torch.nn.DataParallel(model)
 
         if self.config.model.ema:
             ema_helper = EMAHelper(mu=self.config.model.ema_rate)
@@ -287,29 +287,34 @@ class Flow(object):
 
     @torch.no_grad()
     def encode_z(self, args, model):
-        model = model.to(device)
+        model_name = self.config.model.name
+        model = model.to(self.device)
         model.eval()
 
-        # separate out regular mnist and flipped mnist
-        train_mnist, train_cmnist = train_loader
-        val_mnist, val_cmnist = val_loader
-        test_mnist, test_cmnist = test_loader
+        # data
+        dataset = self.config.data.dataset + '_z'  # encoding
+        train_dataloader, val_dataloader, test_dataloader = fetch_dataloaders(dataset, self.config.training.batch_size, self.device, self.args, self.config, self.config.data.flip_toy_var_order)
 
-        save_folder = os.path.join(data_dir, dataset, f'{model_name}_encodings')
+        # separate out regular mnist and flipped mnist
+        train_mnist, train_cmnist = train_dataloader
+        val_mnist, val_cmnist = val_dataloader
+        test_mnist, test_cmnist = test_dataloader
+
+        save_folder = os.path.join(args.data_dir, dataset, '{}_encodings'.format(model_name))
         os.makedirs(save_folder, exist_ok=True)
 
         for split, loader in zip(('train', 'val', 'test'), (train_mnist, val_mnist, test_mnist)):
-            data_type = 'mnist' if not args.subset else 'mnist_subset'
+            data_type = 'mnist' if not self.config.data.subset else 'mnist_subset'
             print('encoding data type {}'.format(data_type))
-            if not os.path.exists(os.path.join(data_dir, 'encodings', data_type)):
-                os.makedirs(os.path.join(data_dir, 'encodings', data_type))
+            if not os.path.exists(os.path.join(args.data_dir, 'encodings', data_type)):
+                os.makedirs(os.path.join(args.data_dir, 'encodings', data_type))
             # TODO: make sure this lines up with previous trained flow!!!
-            save_path = os.path.join(data_dir, 'encodings', data_type, '{}_{}_mnist_z_perc{}'.format(model_name, split, self.config.data.perc))
+            save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_mnist_z_perc{}_test'.format(model_name, split, self.config.data.perc))
             ys = []
             zs = []
             d_ys = []
             for i, (x,y) in enumerate(loader):
-                x = x.to(device)
+                x = x.to(self.device)
                 z, _ = model(x.squeeze())
                 zs.append(z.detach().cpu().numpy())
                 ys.append(y.detach().numpy())
@@ -321,12 +326,12 @@ class Flow(object):
             print(f'Encoding of mnist {split} set completed.')
 
         for split, loader in zip(('train', 'val', 'test'), (train_cmnist, val_cmnist, test_cmnist)):
-            save_path = os.path.join(data_dir, 'encodings', data_type, '{}_{}_cmnist_z_perc{}'.format(model_name, split, self.config.data.perc))
+            save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_cmnist_z_perc{}_test'.format(model_name, split, self.config.data.perc))
             ys = []
             zs = []
             d_ys = []
             for i, (x,y) in enumerate(loader):
-                x = x.to(device)
+                x = x.to(self.device)
                 z, _ = model(x.squeeze())
                 zs.append(z.detach().cpu().numpy())
                 ys.append(y.detach().numpy())
