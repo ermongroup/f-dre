@@ -8,6 +8,7 @@ import sys
 import os
 import torch
 import numpy as np
+sys.path.append(os.path.abspath(os.getcwd()))
 from src.classification.trainers import *
 import getpass
 

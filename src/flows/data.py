@@ -102,6 +102,14 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         input_dims = 784
         label_size = 10
         lam = 1e-6
+        
+    elif dataset_name in ['FlippedMNISTSubset']:
+        train_dataset = FlippedMNISTSubset(args, split='train')
+        val_dataset = FlippedMNISTSubset(args, split='val')
+        test_dataset = FlippedMNISTSubset(args, split='test')
+        input_dims = 784
+        label_size = 10
+        lam = 1e-6
 
     elif dataset_name in ['MNISTSubset_combined']:
         train_mnist = MNISTSubset(args, config, split='train')

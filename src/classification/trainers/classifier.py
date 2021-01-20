@@ -154,11 +154,12 @@ class Classifier(BaseTrainer):
             # check accuracy
             y_preds = self.get_preds(logits.squeeze())
             num_pos_samples += y.sum()
-            num_neg_samples += y.size(0) - num_pos_samples
+            num_neg_samples += y.size(0) - y.sum()
             num_pos_correct += (y_preds[y == 1] == y[y == 1]).sum()
             num_neg_correct += (y_preds[y == 0] == y[y == 0]).sum()
-            acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
 
+            
+            acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
             # gradient update
             self.optimizer.zero_grad()
             loss.backward()
@@ -221,6 +222,7 @@ class Classifier(BaseTrainer):
             # check performance on validation set
             if val_loss <= best_loss:
                 best_acc = val_acc
+                best_loss = val_loss
                 best_epoch = epoch
                 best = True
                 self.clf_diagnostics(val_labels, val_probs, val_ratios, split='val')
@@ -288,7 +290,7 @@ class Classifier(BaseTrainer):
                 # TODO: check accuracy between classes
                 y_preds = self.get_preds(logits.squeeze())
                 num_pos_samples += y.sum()
-                num_neg_samples += y.size(0) - num_pos_samples
+                num_neg_samples += y.size(0) - y.sum()
                 num_pos_correct += (y_preds[y == 1] == y[y == 1]).sum()
                 num_neg_correct += (y_preds[y == 0] == y[y == 0]).sum()
 

@@ -1,6 +1,7 @@
 import os
 import sys
-
+# for module imports:
+sys.path.append(os.path.abspath(os.getcwd()))
 import copy
 import logging
 from pprint import pprint
