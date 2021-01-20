@@ -267,31 +267,34 @@ def generate_many_samples(model, args, clf, n_row=10):
 
 @torch.no_grad()
 def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
+    from torch.distributions import Categorical
+
     all_samples = []
     preds = []
 
     model.eval()
     dre_clf.eval()
     attr_clf.eval()
-    args.alpha = 0
-    print(args.alpha)
 
-    print('generating {} samples in batches of 1000...'.format(args.n_samples))
+    # print('generating {} samples in batches of 1000...'.format(args.n_samples))
+    print('running SIR sampling...as a sanity check, we are only going to generate 20 samples total.')
     n_batches = int(args.n_samples // 1000)
-    for n in range(n_batches):
-        if (n % 10 == 0) and (n > 0):
-            print('on iter {}/{}'.format(n, n_batches))
+    # for n in range(n_batches):
+    
+    for n in range(20):
+        if (n % 5 == 0) and (n > 0):
+            print('on iter {}/{}'.format(n, 20))
         u = model.base_dist.sample((1000, args.n_components)).squeeze().to(device)
         
         # TODO: reweight the samples via dre_clf
         logits, probas = dre_clf(u.view(1000, 1, 28, 28))
         # print('flattening importance weights by alpha={}'.format(args.alpha))
-        ratios = (probas[:, 1]/probas[:, 0])**(args.alpha)
-        u_hat = u * torch.sqrt(ratios).unsqueeze(1)
-        # print('original u range:', u.min().item(), u.max().item())
-        # print('reweighted u range:', u_hat.min().item(), u_hat.max().item())
-        
-        samples, _ = model.inverse(u_hat)
+        # ratios = ratios**(args.alpha)
+        ratios = (probas[:, 1]/probas[:, 0])
+        r_probs = ratios/ratios.sum()
+        sir_j = Categorical(r_probs).sample().item()
+
+        samples, _ = model.inverse(u[sir_j].unsqueeze(0))
         log_probs = model.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
         samples = samples[log_probs]
         samples = samples.view((samples.shape[0], args.channels, args.image_size, args.image_size))
@@ -317,8 +320,8 @@ def fair_generate(model, args, dre_clf, attr_clf, step=None, n_row=10):
         'l2_fair_disc': fair_disc_l2,
         })
     # maybe just save some samples?
-    filename = 'fair_samples_{}'.format(args.alpha) + '.png'
-    save_image(torch.from_numpy(all_samples[0:2500]), os.path.join(args.output_dir, filename), nrow=50, normalize=True)
+    filename = 'fair_samples_sir'.format(args.alpha) + '.png'
+    save_image(torch.from_numpy(all_samples), os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
 
 def save_encodings(model, train_loader, val_loader, test_loader, model_name, data_dir, dataset):
@@ -338,6 +341,7 @@ def save_encodings(model, train_loader, val_loader, test_loader, model_name, dat
         print('encoding data type {}'.format(data_type))
         if not os.path.exists(os.path.join(data_dir, 'encodings', data_type)):
             os.makedirs(os.path.join(data_dir, 'encodings', data_type))
+        # TODO: make sure this lines up with previous trained flow!!!
         save_path = os.path.join(data_dir, 'encodings', data_type, '{}_{}_mnist_z_perc{}'.format(model_name, split, args.perc))
         ys = []
         zs = []

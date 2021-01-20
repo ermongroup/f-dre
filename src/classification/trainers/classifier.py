@@ -180,6 +180,7 @@ class Classifier(BaseTrainer):
             data_tqdm.update(z.shape[0])
         # end of training epoch
         avg_acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
+        avg_acc = avg_acc.detach().cpu().numpy()
         print()
         print('Completed epoch {}: train loss: {}, train acc: {}'.format(
             epoch, 
@@ -296,6 +297,7 @@ class Classifier(BaseTrainer):
                 p_y1.append(probs)
         
         avg_acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
+        avg_acc = avg_acc.detach().cpu().numpy()
         # Completed running test
         print('Completed evaluation: {} loss: {}, {} acc: {}'.format(
             test_type,
