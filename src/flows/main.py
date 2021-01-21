@@ -7,7 +7,6 @@ import sys
 import os
 import torch
 import numpy as np
-import torch.utils.tensorboard as tb
 
 from trainers.flow import Flow
 # from trainers.classifier import Classifier
@@ -93,15 +92,15 @@ def parse_args_and_config():
     new_config = dict2namespace(config)
 
     # set up wandb
-    wandb.init(
-        project='multi-fairgen', 
-        entity=WANDB[getpass.getuser()], 
-        name=new_config.training.exp_id, 
-        config=new_config, 
-        sync_tensorboard=True,
-    )
-
-    tb_path = os.path.join(args.exp, "tensorboard", args.doc)
+    if not args.sample:
+        # only for training
+        wandb.init(
+            project='multi-fairgen', 
+            entity=WANDB[getpass.getuser()], 
+            name=new_config.training.exp_id, 
+            config=new_config, 
+            sync_tensorboard=True,
+        )
 
     if not args.test and not args.sample:
         if not args.resume_training:
@@ -116,10 +115,7 @@ def parse_args_and_config():
 
                 if overwrite:
                     shutil.rmtree(args.log_path)
-                    shutil.rmtree(tb_path)
                     os.makedirs(args.log_path)
-                    if os.path.exists(tb_path):
-                        shutil.rmtree(tb_path)
                 else:
                     print("Folder exists. Program halted.")
                     sys.exit(0)
@@ -129,7 +125,6 @@ def parse_args_and_config():
             with open(os.path.join(args.log_path, "config.yml"), "w") as f:
                 yaml.dump(new_config, f, default_flow_style=False)
 
-        new_config.tb_logger = tb.SummaryWriter(log_dir=tb_path)
         # setup logger
         level = getattr(logging, args.verbose.upper(), None)
         if not isinstance(level, int):

@@ -101,12 +101,11 @@ class Flow(object):
 
     def train(self):
         args, config = self.args, self.config
-        tb_logger = self.config.tb_logger
         train_dataloader, val_dataloader, test_dataloader = fetch_dataloaders(self.config.data.dataset, self.config.training.batch_size, self.device, self.args, self.config, self.config.data.flip_toy_var_order)
         
         model = self.get_model()
         model = model.to(self.device)
-        model = torch.nn.DataParallel(model)
+        # model = torch.nn.DataParallel(model)
 
         optimizer = get_optimizer(self.config, model.parameters())
 
@@ -124,6 +123,7 @@ class Flow(object):
             model.load_state_dict(state['model_state'])
             optimizer.load_state_dict(state['optimizer_state'])
             start_epoch = state['epoch'] + 1
+        model = torch.nn.DataParallel(model)
 
         for epoch in range(start_epoch, self.config.training.n_epochs):
             data_start = time.time()
@@ -327,6 +327,7 @@ class Flow(object):
                 os.makedirs(os.path.join(args.data_dir, 'encodings', data_type))
             # TODO: make sure this lines up with previous trained flow!!!
             save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_mnist_z_perc{}'.format(model_name, split, self.config.data.perc))
+            print('saving encodings in: {}'.format(save_path))
             ys = []
             zs = []
             d_ys = []
@@ -344,11 +345,12 @@ class Flow(object):
 
         for split, loader in zip(('train', 'val', 'test'), (train_cmnist, val_cmnist, test_cmnist)):
             save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_cmnist_z_perc{}'.format(model_name, split, self.config.data.perc))
+            print('saving encodings in: {}'.format(save_path))
             ys = []
             zs = []
             d_ys = []
             for i, (x,y) in enumerate(loader):
-                x = x.to(self.dfevice)
+                x = x.to(self.device)
                 z, _ = model(x.squeeze())
                 zs.append(z.detach().cpu().numpy())
                 ys.append(y.detach().numpy())
@@ -372,21 +374,24 @@ class Flow(object):
         self.dre_clf.eval()
         self.attr_clf.eval()
 
+        alpha = 0.01
+        if alpha > 0:
+            print('flattening importance weights by alpha={}'.format(alpha))
+
         # print('generating {} samples in batches of 1000...'.format(args.n_samples))
-        print('running SIR sampling...as a sanity check, we are only going to generate 20 samples total.')
+        print('running SIR sampling...as a sanity check, we are only going to generate 100 samples total.')
         n_batches = int(self.config.sampling.n_samples // 1000)
         # for n in range(n_batches):
         
-        for n in range(20):  # HACK
+        for n in range(100):  # HACK
             if (n % 5 == 0) and (n > 0):
-                print('on iter {}/{}'.format(n, 20))
+                print('on iter {}/{}'.format(n, 100))
             u = model.module.base_dist.sample((1000, self.config.model.n_components)).squeeze().to(self.device)
             
             # TODO: reweight the samples via dre_clf
             logits, probas = self.dre_clf(u.view(1000, 1, 28, 28))
-            # print('flattening importance weights by alpha={}'.format(args.alpha))
-            # ratios = ratios**(args.alpha)
             ratios = (probas[:, 1]/probas[:, 0])
+            ratios = ratios**(alpha)
             r_probs = ratios/ratios.sum()
             sir_j = Categorical(r_probs).sample().item()
 

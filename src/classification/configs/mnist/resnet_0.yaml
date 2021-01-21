@@ -33,9 +33,9 @@ model:
   n_classes: 2
 
 optim:
-  weight_decay: 0.000
+  weight_decay: 0.0005
   optimizer: "Adam"
-  lr: 0.0002
+  lr: 0.0001
   beta1: 0.9
   amsgrad: false
 

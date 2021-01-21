@@ -47,9 +47,6 @@ class ourMNIST(VisionDataset):
         item = self.data[index]
         # label = self.labels[index]
         label = torch.zeros(1)
-
-        # dequantize input
-        # (TODO: maybe this won't work out of the box without rng)
         item = item.view((-1, 784))
 
         return item, label
@@ -125,9 +122,6 @@ class FlippedMNIST(VisionDataset):
         item = self.data[index]
         # label = self.labels[index]
         label = torch.ones(1)
-
-        # dequantize input
-        # (TODO: maybe this won't work out of the box without rng)
         item = item.view((-1, 784))
 
         return item, label
