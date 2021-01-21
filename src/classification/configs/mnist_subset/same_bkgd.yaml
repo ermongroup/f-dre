@@ -12,15 +12,10 @@ data:
   dataset: "MNIST"
   subset: true
   x_space: false
-  digits: [0,7]
-  digit_percs: [0.2, 0.8]
-  flipped_digits: [0, 7]
-  flipped_digit_percs: [0.5, 0.5]
+  perc: 0.5
   image_size: 28
   channels: 1
   random_flip: false
-  perc: 0.5
-  class_idx: 20
   num_workers: 4
 
 model:

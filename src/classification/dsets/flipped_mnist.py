@@ -75,11 +75,11 @@ class SplitEncodedMNIST(Dataset):
         self.config = config
         self.subset = config.data.subset
         self.perc = config.data.perc
-        self.ref_dset = self.load_dataset(split, 'cmnist')
-        self.biased_dset = self.load_dataset(split, 'mnist')
+        self.ref_dset = self.load_dataset(split, 'mnist_ref')
+        self.biased_dset = self.load_dataset(split, 'mnist_biased')
 
     def load_dataset(self, split, variant='mnist'):
-        data_type = 'mnist' if not self.subset else 'mnist_subset'
+        data_type = 'mnist' if not self.subset else 'mnist_subset_same_bkgd'
         fpath = os.path.join(
             self.config.training.data_dir, 'encodings', data_type, 'maf_{}_{}_z_perc{}.npz'.format(
             split, variant, self.perc))

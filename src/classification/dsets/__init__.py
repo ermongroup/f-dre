@@ -43,6 +43,10 @@ def get_dataset(args, config):
         dataset = SplitMNIST(config, split='train')
         val_dataset = SplitMNIST(config, split='val')
         test_dataset = SplitMNIST(config, split='test')
+    elif config.data.dataset == 'MNISTSubsets':
+        dataset = SplitMNIST(config, split='train')
+        val_dataset = SplitMNIST(config, split='val')
+        test_dataset = SplitMNIST(config, split='test')
     elif config.data.dataset == 'SplitMNISTSubset':
         dataset = SplitMNISTSubset(config, split='train')
         val_dataset = SplitMNISTSubset(config, split='val')

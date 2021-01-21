@@ -6,3 +6,4 @@ data
 run/
 src/classification/checkpoints
 old_results/
+wandb/

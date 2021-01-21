@@ -4,9 +4,9 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "mnist_z_perc0.5"
-  out_dir: "/atlas/u/kechoi/multi-fairgen/classification/"
-  data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
+  exp_id: "mnist_z_perc"
+  out_dir: "/atlas/u/madeline/multi-fairgen/classification/results"
+  data_dir: "/atlas/u/madeline/multi-fairgen/data/"
 
 data:
   dataset: "MNIST"
@@ -17,7 +17,7 @@ data:
   x_space: false
   train_perc: 0.8
   test_perc: 0.1
-  perc: 0.5
+  perc: 0.1
   biased_split: 0.9
   ref_split: 0.5
   class_idx: 20

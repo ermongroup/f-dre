@@ -44,14 +44,13 @@ def parse_args_and_config():
 
     # make output directories
     output_dir = os.path.join(
-        new_config.training.out_dir, 'results', new_config.training.exp_id)
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
+        new_config.training.out_dir, 'results', f'{new_config.training.exp_id}_perc{new_config.data.perc}')
+    
+    os.makedirs(output_dir, exist_ok=True)
     new_config.out_dir = output_dir
-    ckpt_dir = os.path.join(
-        new_config.training.out_dir, 'checkpoints', new_config.training.exp_id)
-    if not os.path.exists(ckpt_dir):
-        os.makedirs(ckpt_dir)
+    ckpt_dir = os.path.join(new_config.out_dir, 'checkpoints')
+    os.makedirs(ckpt_dir, exist_ok=True)
+
     new_config.ckpt_dir = ckpt_dir
     if not args.test:
         if not args.resume_training:

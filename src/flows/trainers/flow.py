@@ -64,9 +64,10 @@ class Flow(object):
         self.device = device
         
         # if necessary, load (pretrained) density ratio estimates
-        if self.args.reweight:
+        if self.args.fair_generate:
             self.dre_clf = self.load_classifier(self.args, 'resnet')
-        self.attr_clf = self.load_classifier(self.args, 'mlp')
+        if self.args.sample:
+            self.attr_clf = self.load_classifier(self.args, 'mlp')
 
     def get_model(self):
         # TODO: do something about these args
@@ -177,11 +178,11 @@ class Flow(object):
                 'epoch': epoch,
                 'model_state': model.module.state_dict(),
                 'optimizer_state': optimizer.state_dict()},
-                os.path.join(args.output_dir, 'model_checkpoint.pt'))
+                os.path.join(args.out_dir, 'model_checkpoint.pt'))
             # save model only
             torch.save(
                 model.state_dict(), os.path.join(
-                    args.output_dir, 'model_state.pt'))
+                    args.out_dir, 'model_state.pt'))
             # save best state
             if eval_logprob > best_eval_logprob:
                 best_eval_logprob = eval_logprob
@@ -189,7 +190,7 @@ class Flow(object):
                     'epoch': epoch,
                     'model_state': model.module.state_dict(),
                     'optimizer_state': optimizer.state_dict()},
-                    os.path.join(args.output_dir, 'best_model_checkpoint.pt'))
+                    os.path.join(args.out_dir, 'best_model_checkpoint.pt'))
                 # generate samples
                 self.visualize(self.args, model, epoch)
 
@@ -207,7 +208,7 @@ class Flow(object):
         logprob_mean, logprob_std = logprobs.mean(0), 2 * logprobs.var(0).sqrt() / math.sqrt(len(dataloader.dataset))
         output = 'Evaluate ' + (epoch != None)*'(epoch {}) -- '.format(epoch) + 'logp(x) = {:.3f} +/- {:.3f}'.format(logprob_mean, logprob_std)
         print(output)
-        results_file = os.path.join(args.output_dir, 'results.txt')
+        results_file = os.path.join(args.out_dir, 'results.txt')
         print(output, file=open(results_file, 'a'))
         return logprob_mean, logprob_std
 
@@ -257,7 +258,7 @@ class Flow(object):
         samples = torch.sigmoid(samples)
         samples = torch.clamp(samples, 0., 1.)
         filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
-        save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
+        save_image(samples, os.path.join(args.out_dir, filename), nrow=n_row, normalize=True)
         # log generations to wandb
         wandb.log({"samples" : [wandb.Image(i) for i in samples[0:40]]})
 
@@ -293,14 +294,14 @@ class Flow(object):
         all_samples = np.vstack(all_samples)
         preds = np.hstack(preds)
         fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
-        np.savez(os.path.join(args.output_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'samples'), **{'x': all_samples})
-        np.savez(os.path.join(args.output_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'metrics'), 
+        np.savez(os.path.join(args.out_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'samples'), **{'x': all_samples})
+        np.savez(os.path.join(args.out_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'metrics'), 
             **{'preds': preds,
             'l2_fair_disc': fair_disc_l2,
             })
         # maybe just save some samples just for visualizations?
         filename = 'samples'+ '.png'
-        save_image(all_samples[0:100], os.path.join(self.args.output_dir, filename), nrow=n_row, normalize=True)
+        save_image(all_samples[0:100], os.path.join(self.args.out_dir, filename), nrow=n_row, normalize=True)
 
     @torch.no_grad()
     def encode_z(self, args, model):
@@ -309,25 +310,22 @@ class Flow(object):
         model.eval()
 
         # data
-        dataset = self.config.data.dataset + '_z'  # encoding
+        dataset = self.config.data.dataset
         train_dataloader, val_dataloader, test_dataloader = fetch_dataloaders(dataset, self.config.training.batch_size, self.device, self.args, self.config, self.config.data.flip_toy_var_order)
 
-        # separate out regular mnist and flipped mnist
-        train_mnist, train_cmnist = train_dataloader
-        val_mnist, val_cmnist = val_dataloader
-        test_mnist, test_cmnist = test_dataloader
-
-        save_folder = os.path.join(args.data_dir, dataset, '{}_encodings'.format(model_name))
+        # separate out biased mnist and ref mnist
+        train_biased, train_ref = train_dataloader
+        val_biased, val_ref = val_dataloader
+        test_biased, test_ref = test_dataloader
+        save_folder = os.path.join(self.config.training.data_dir, 'encodings', dataset)
         os.makedirs(save_folder, exist_ok=True)
+        print(f'encoding dataset {dataset}')
 
-        for split, loader in zip(('train', 'val', 'test'), (train_mnist, val_mnist, test_mnist)):
-            data_type = 'mnist' if not self.config.data.subset else 'mnist_subset'
-            print('encoding data type {}'.format(data_type))
-            if not os.path.exists(os.path.join(args.data_dir, 'encodings', data_type)):
-                os.makedirs(os.path.join(args.data_dir, 'encodings', data_type))
-            # TODO: make sure this lines up with previous trained flow!!!
-            save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_mnist_z_perc{}'.format(model_name, split, self.config.data.perc))
+        for split, loader in zip(('train', 'val', 'test'), (train_biased, val_biased, test_biased)):
+            # data_type = 'mnist' if not self.config.data.subset else 'mnist_subset_same_bkgd'
+            save_path = os.path.join(save_folder, f'{model_name}_{split}_biased_z_perc{self.config.data.perc}')
             print('saving encodings in: {}'.format(save_path))
+            
             ys = []
             zs = []
             d_ys = []
@@ -341,10 +339,10 @@ class Flow(object):
             ys = np.hstack(ys)
             d_ys = np.hstack(d_ys)
             np.savez(save_path, **{'z': zs, 'y': ys, 'd_y': d_ys})
-            print(f'Encoding of mnist {split} set completed.')
+            print(f'Encoding of biased {split} set completed.')
 
-        for split, loader in zip(('train', 'val', 'test'), (train_cmnist, val_cmnist, test_cmnist)):
-            save_path = os.path.join(args.data_dir, 'encodings', data_type, '{}_{}_cmnist_z_perc{}'.format(model_name, split, self.config.data.perc))
+        for split, loader in zip(('train', 'val', 'test'), (train_ref, val_ref, test_ref)):
+            save_path = os.path.join(save_folder, f'{model_name}_{split}_ref_z_perc{self.config.data.perc}')
             print('saving encodings in: {}'.format(save_path))
             ys = []
             zs = []
@@ -359,12 +357,13 @@ class Flow(object):
             ys = np.hstack(ys)
             d_ys = np.hstack(d_ys)
             np.savez(save_path, **{'z': zs, 'y': ys, 'd_y': d_ys})
-            print(f'Encoding of flipped mnist {split} set completed.')
+            print(f'Encoding of ref {split} set completed.')
         # done
         print('Done encoding all x')
 
     @torch.no_grad()
-    def fair_generate(self, args, model, n_row=10):
+
+    def fair_generate(self, args, config, model, n_row=10):
         from torch.distributions import Categorical
 
         all_samples = []
@@ -374,7 +373,7 @@ class Flow(object):
         self.dre_clf.eval()
         self.attr_clf.eval()
 
-        alpha = 0.01
+        alpha = config.dre.alpha
         if alpha > 0:
             print('flattening importance weights by alpha={}'.format(alpha))
 
@@ -414,15 +413,15 @@ class Flow(object):
         fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
         print('prop of 1s:', np.sum(preds)/len(preds))
         print('L2 fairness discrepancy is: {}'.format(fair_disc_l2))
-        np.savez(os.path.join(args.output_dir, 'samples'), **{'x': all_samples})
-        np.savez(os.path.join(args.output_dir, 'metrics'), 
+        np.savez(os.path.join(args.out_dir, 'samples'), **{'x': all_samples})
+        np.savez(os.path.join(args.out_dir, 'metrics'), 
             **{
             'preds': preds,
             'l2_fair_disc': fair_disc_l2,
             })
         # maybe just save some samples?
         filename = 'fair_samples_sir'.format(self.config.dre.alpha) + '.png'
-        save_image(torch.from_numpy(all_samples), os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
+        save_image(torch.from_numpy(all_samples), os.path.join(args.out_dir, filename), nrow=n_row, normalize=True)
 
 
 def dict2namespace(config):

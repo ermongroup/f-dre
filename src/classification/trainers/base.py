@@ -31,7 +31,7 @@ class BaseTrainer:
         cfg_trainer = config['training']
         self.n_epochs = cfg_trainer['epochs']
         self.iter_save = cfg_trainer['iter_save']
-        self.checkpoint_dir = cfg_trainer['save_dir']
+        self.checkpoint_dir = config['ckpt_dir']
 
         # setup visualization writer instance                
         self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])

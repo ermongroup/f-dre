@@ -6,11 +6,9 @@ from torch.utils.data.dataset import ConcatDataset
 import torchvision.transforms as T
 from torch.utils.data import DataLoader, TensorDataset
 
-import datasets
-from datasets.cmnist import (
+import src.flows.datasets as datasets
+from src.flows.datasets.cmnist import (
     ourMNIST,
-    FlippedMNIST,
-    FlippedMNISTSubset, 
     MNISTSubset
 )
 
@@ -70,65 +68,61 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         lam = dataset.alpha
 
     elif dataset_name in ['ourMNIST']:
+        input_dims = 784
+        label_size = 10
+        lam = 1e-6
+
         train_dataset = ourMNIST(args, config, split='train')
         val_dataset = ourMNIST(args, config, split='val')
         test_dataset = ourMNIST(args, config, split='test')
-
+        
+    elif dataset_name in ['BackgroundMNIST']:
+        '''
+        MNIST with black and white backgrounds
+        '''
         input_dims = 784
         label_size = 10
         lam = 1e-6
-    elif dataset_name in ['MNIST_combined']:
+
+        # black background
         train_mnist = ourMNIST(args, config, split='train')
         val_mnist = ourMNIST(args, config, split='val')
         test_mnist = ourMNIST(args, config, split='test')
 
-        #TODO: CMNIST load_dataset
-        train_cmnist = FlippedMNIST(args, config, split='train')
-        val_cmnist = FlippedMNIST(args, config, split='val')
-        test_cmnist = FlippedMNIST(args, config, split='test')
-
-        # will you want to see a little bit of each example in each batch?
-        train_dataset = ConcatDataset([train_mnist, train_cmnist])
-        val_dataset = ConcatDataset([val_mnist, val_cmnist])
-        test_dataset = ConcatDataset([test_mnist, test_cmnist])
+        # white background
+        train_flipped = ourMNIST(args, config, split='train', flipped=True)
+        val_flipped = ourMNIST(args, config, split='val', flipped=True)
+        test_flipped = ourMNIST(args, config, split='test', flipped=True)
         
-        input_dims = 784
-        label_size = 10
-        lam = 1e-6
-    elif dataset_name in ['FlippedMNIST']:
-        train_dataset = FlippedMNIST(args, config, split='train')
-        val_dataset = FlippedMNIST(args, config, split='val')
-        test_dataset = FlippedMNIST(args, config, split='test')
-        input_dims = 784
-        label_size = 10
-        lam = 1e-6
+        if args.encode_z:
+            # keep MNIST and flipped MNIST separate for encoding
+            for dataset in (train_mnist, train_flipped):
+                dataset.input_dims = input_dims
+                dataset.input_size = int(np.prod(input_dims))
+                dataset.label_size = label_size
+            
+            kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
+
+            train_loader = DataLoader(train_mnist, batch_size, shuffle=True, **kwargs)
+            val_loader = DataLoader(val_mnist, batch_size, shuffle=False, **kwargs)
+            test_loader = DataLoader(test_mnist, batch_size, shuffle=False, **kwargs)
+            train_loader2 = DataLoader(train_flipped, batch_size, shuffle=True, **kwargs)
+            val_loader2 = DataLoader(val_flipped, batch_size, shuffle=False, **kwargs)
+            test_loader2 = DataLoader(test_flipped, batch_size, shuffle=False, **kwargs)
+
+            return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
+        else:
+            # combine both
+            train_dataset = ConcatDataset([train_mnist, train_flipped])
+            val_dataset = ConcatDataset([val_mnist, val_flipped])
+            test_dataset = ConcatDataset([test_mnist, test_flipped])
         
-    elif dataset_name in ['FlippedMNISTSubset']:
-        train_dataset = FlippedMNISTSubset(args, split='train')
-        val_dataset = FlippedMNISTSubset(args, split='val')
-        test_dataset = FlippedMNISTSubset(args, split='test')
-        input_dims = 784
-        label_size = 10
-        lam = 1e-6
+    
 
-    elif dataset_name in ['MNISTSubset_combined']:
-        train_mnist = MNISTSubset(args, config, split='train')
-        val_mnist = MNISTSubset(args, config, split='val')
-        test_mnist = MNISTSubset(args, config, split='test')
-
-        train_cmnist = FlippedMNISTSubset(args, config, split='train')
-        val_cmnist = FlippedMNISTSubset(args, config, split='val')
-        test_cmnist = FlippedMNISTSubset(args, config, split='test')
-
-        train_dataset = ConcatDataset([train_mnist, train_cmnist])
-        val_dataset = ConcatDataset([val_mnist, val_cmnist])
-        test_dataset = ConcatDataset([test_mnist, test_cmnist])
-        
-        input_dims = 784
-        label_size = 10
-        lam = 1e-6
-
-    elif dataset_name in ['MNISTSubset_combined_z']:
+    elif dataset_name in ['BackgroundMNISTSubset']:
+        '''
+        Subset of MNIST digits with black and white backgrounds
+        '''
         input_dims = 784
         label_size = 10
         lam = 1e-6
@@ -137,119 +131,231 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         val_mnist = MNISTSubset(args, config, split='val')
         test_mnist = MNISTSubset(args, config, split='test')
 
-        train_mnist.input_dims = input_dims
-        train_mnist.input_size = int(np.prod(input_dims))
-        train_mnist.label_size = label_size
+        train_flipped = MNISTSubset(args, config, split='train', flipped=True)
+        val_flipped = MNISTSubset(args, config, split='val', flipped=True)
+        test_flipped = MNISTSubset(args, config, split='test', flipped=True)
+        
+        if args.encode_z:
+            # keep regular and flipped MNIST separate for encoding
+            for dataset in (train_mnist, train_flipped):
+                dataset.input_dims = input_dims
+                dataset.input_size = int(np.prod(input_dims))
+                dataset.label_size = label_size
+            
+            kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
 
-        #TODO: CMNIST load_dataset
-        train_cmnist = FlippedMNISTSubset(args, config, split='train')
-        val_cmnist = FlippedMNISTSubset(args, config, split='val')
-        test_cmnist = FlippedMNISTSubset(args, config, split='test')
+            train_loader = DataLoader(train_mnist, batch_size, shuffle=True, **kwargs)
+            val_loader = DataLoader(val_mnist, batch_size, shuffle=False, **kwargs)
+            test_loader = DataLoader(test_mnist, batch_size, shuffle=False, **kwargs)
+            train_loader2 = DataLoader(train_flipped, batch_size, shuffle=True, **kwargs)
+            val_loader2 = DataLoader(val_flipped, batch_size, shuffle=False, **kwargs)
+            test_loader2 = DataLoader(test_flipped, batch_size, shuffle=False, **kwargs)
 
-        train_cmnist.input_dims = input_dims
-        train_cmnist.input_size = int(np.prod(input_dims))
-        train_cmnist.label_size = label_size
+            return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
+        else:
+            train_dataset = ConcatDataset([train_mnist, train_flipped])
+            val_dataset = ConcatDataset([val_mnist, val_flipped])
+            test_dataset = ConcatDataset([test_mnist, test_flipped])
 
-        # keep these datasets separate for encoding
-        # construct dataloaders
-        kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
 
-        train_loader = DataLoader(
-            train_mnist, batch_size, shuffle=True, **kwargs)
-        val_loader = DataLoader(
-            val_mnist, batch_size, shuffle=False, **kwargs)
-        test_loader = DataLoader(
-            test_mnist, batch_size, shuffle=False, **kwargs)
-        train_loader2 = DataLoader(
-            train_cmnist, batch_size, shuffle=True, **kwargs)
-        val_loader2 = DataLoader(
-            val_cmnist, batch_size, shuffle=False, **kwargs)
-        test_loader2 = DataLoader(
-            test_cmnist, batch_size, shuffle=False, **kwargs)
-
-        return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
-
-    elif dataset_name in ['MNIST_combined_z']:
+    elif dataset_name in ['DigitMNISTSubset']:
+        '''
+        Biased and reference sets with different digit subsets (but same background color)
+        '''
         input_dims = 784
         label_size = 10
         lam = 1e-6
 
-        train_mnist = ourMNIST(args, config, split='train')
-        val_mnist = ourMNIST(args, config, split='val')
-        test_mnist = ourMNIST(args, config, split='test')
+        ref_perc = config.data.perc
+        config.data.digits = config.data.biased_digits
+        config.data.digit_percs = config.data.biased_digit_percs
+        config.data.perc = 1.0
 
-        train_mnist.input_dims = input_dims
-        train_mnist.input_size = int(np.prod(input_dims))
-        train_mnist.label_size = label_size
+        train_biased = MNISTSubset(args, config, split='train')
+        val_biased = MNISTSubset(args, config, split='val')
+        test_biased = MNISTSubset(args, config, split='test')
 
-        #TODO: CMNIST load_dataset
-        train_cmnist = FlippedMNIST(args, config, split='train')
-        val_cmnist = FlippedMNIST(args, config, split='val')
-        test_cmnist = FlippedMNIST(args, config, split='test')
+        config.data.digits = config.data.ref_digits
+        config.data.digit_percs = config.data.ref_digit_percs
+        config.data.perc = ref_perc
 
-        train_cmnist.input_dims = input_dims
-        train_cmnist.input_size = int(np.prod(input_dims))
-        train_cmnist.label_size = label_size
+        train_ref = MNISTSubset(args, config, split='train')
+        val_ref = MNISTSubset(args, config, split='val')
+        test_ref = MNISTSubset(args, config, split='test')
+        if args.encode_z:
+            # keep each dataset separate for encoding
+            for dataset in (train_biased, train_ref):
+                dataset.input_dims = input_dims
+                dataset.input_size = int(np.prod(input_dims))
+                dataset.label_size = label_size
+            
+            kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
 
-        # keep these datasets separate for encoding
-        # construct dataloaders
-        kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
+            train_loader_biased = DataLoader(train_biased, batch_size, shuffle=True, **kwargs)
+            val_loader_biased = DataLoader(val_biased, batch_size, shuffle=False, **kwargs)
+            test_loader_biased = DataLoader(test_biased, batch_size, shuffle=False, **kwargs)
+            train_loader_ref = DataLoader(train_ref, batch_size, shuffle=True, **kwargs)
+            val_loader_ref = DataLoader(val_ref, batch_size, shuffle=False, **kwargs)
+            test_loader_ref = DataLoader(test_ref, batch_size, shuffle=False, **kwargs)
 
-        train_loader = DataLoader(
-            train_mnist, batch_size, shuffle=True, **kwargs)
-        val_loader = DataLoader(
-            val_mnist, batch_size, shuffle=False, **kwargs)
-        test_loader = DataLoader(
-            test_mnist, batch_size, shuffle=False, **kwargs)
-        train_loader2 = DataLoader(
-            train_cmnist, batch_size, shuffle=True, **kwargs)
-        val_loader2 = DataLoader(
-            val_cmnist, batch_size, shuffle=False, **kwargs)
-        test_loader2 = DataLoader(
-            test_cmnist, batch_size, shuffle=False, **kwargs)
+            return [train_loader_biased, train_loader_ref], [val_loader_biased, val_loader_ref], [test_loader_biased, test_loader_ref]
 
-        return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
+        train_dataset = ConcatDataset([train_biased, train_ref])
+        val_dataset = ConcatDataset([val_biased, val_ref])
+        test_dataset = ConcatDataset([test_biased, test_ref])
+    
+    
+    
+    # elif dataset_name in ['FlippedMNIST']:
+    #     input_dims = 784
+    #     label_size = 10
+    #     lam = 1e-6
 
-    elif dataset_name in ['MNISTSubset_combined_z']:
-        input_dims = 784
-        label_size = 10
-        lam = 1e-6
+    #     train_dataset = FlippedMNIST(args, config, split='train')
+    #     val_dataset = FlippedMNIST(args, config, split='val')
+    #     test_dataset = FlippedMNIST(args, config, split='test')
+    
+    # elif dataset_name in ['FlippedMNISTSubset']:
+    #     input_dims = 784
+    #     label_size = 10
+    #     lam = 1e-6
 
-        train_mnist = MNISTSubset(args, config, split='train')
-        val_mnist = MNISTSubset(args, config, split='val')
-        test_mnist = MNISTSubset(args, config, split='test')
+    #     train_dataset = FlippedMNISTSubset(args, split='train')
+    #     val_dataset = FlippedMNISTSubset(args, split='val')
+    #     test_dataset = FlippedMNISTSubset(args, split='test')
+    # 
+    # 
+    # 
+    # 
+    # 
+    # 
+    #         
+    # elif dataset_name in ['MNISTSubsets_z']:
+    #     input_dims = 784
+    #     label_size = 10
+    #     lam = 1e-6
 
-        train_mnist.input_dims = input_dims
-        train_mnist.input_size = int(np.prod(input_dims))
-        train_mnist.label_size = label_size
+    #     ref_perc = config.data.perc
+    #     config.data.digits = config.data.biased_digits
+    #     config.data.digit_percs = config.data.biased_digit_percs
+    #     config.data.perc = 1.0
+    #     train_mnist1 = MNISTSubset(args, config, split='train')
+    #     val_mnist1 = MNISTSubset(args, config, split='val')
+    #     test_mnist1 = MNISTSubset(args, config, split='test')
 
-        #TODO: CMNIST load_dataset
-        train_cmnist = FlippedMNISTSubset(args, config, split='train')
-        val_cmnist = FlippedMNISTSubset(args, config, split='val')
-        test_cmnist = FlippedMNISTSubset(args, config, split='test')
+    #     config.data.digits = config.data.ref_digits
+    #     config.data.digit_percs = config.data.ref_digit_percs
+    #     config.data.perc = ref_perc
 
-        train_cmnist.input_dims = input_dims
-        train_cmnist.input_size = int(np.prod(input_dims))
-        train_cmnist.label_size = label_size
+    #     train_mnist2 = MNISTSubset(args, config, split='train')
+    #     val_mnist2 = MNISTSubset(args, config, split='val')
+    #     test_mnist2 = MNISTSubset(args, config, split='test')
+        
+    #     train_mnist1.input_dims = input_dims
+    #     train_mnist1.input_size = int(np.prod(input_dims))
+    #     train_mnist1.label_size = label_size
 
-        # keep these datasets separate for encoding
-        # construct dataloaders
-        kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
+    #     train_mnist2.input_dims = input_dims
+    #     train_mnist2.input_size = int(np.prod(input_dims))
+    #     train_mnist2.label_size = label_size
+    #     kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
 
-        train_loader = DataLoader(
-            train_mnist, batch_size, shuffle=True, **kwargs)
-        val_loader = DataLoader(
-            val_mnist, batch_size, shuffle=False, **kwargs)
-        test_loader = DataLoader(
-            test_mnist, batch_size, shuffle=False, **kwargs)
-        train_loader2 = DataLoader(
-            train_cmnist, batch_size, shuffle=True, **kwargs)
-        val_loader2 = DataLoader(
-            val_cmnist, batch_size, shuffle=False, **kwargs)
-        test_loader2 = DataLoader(
-            test_cmnist, batch_size, shuffle=False, **kwargs)
+    #     train_loader = DataLoader(
+    #         train_mnist1, batch_size, shuffle=True, **kwargs)
+    #     val_loader = DataLoader(
+    #         val_mnist1, batch_size, shuffle=False, **kwargs)
+    #     test_loader = DataLoader(
+    #         test_mnist1, batch_size, shuffle=False, **kwargs)
+    #     train_loader2 = DataLoader(
+    #         train_mnist2, batch_size, shuffle=True, **kwargs)
+    #     val_loader2 = DataLoader(
+    #         val_mnist2, batch_size, shuffle=False, **kwargs)
+    #     test_loader2 = DataLoader(
+    #         test_mnist2, batch_size, shuffle=False, **kwargs)
 
-        return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
+    #     return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
+    # elif dataset_name in ['MNISTSubset_combined_z']:
+    #     input_dims = 784
+    #     label_size = 10
+    #     lam = 1e-6
+
+    #     train_mnist = MNISTSubset(args, config, split='train')
+    #     val_mnist = MNISTSubset(args, config, split='val')
+    #     test_mnist = MNISTSubset(args, config, split='test')
+
+    #     train_mnist.input_dims = input_dims
+    #     train_mnist.input_size = int(np.prod(input_dims))
+    #     train_mnist.label_size = label_size
+
+    #     #TODO: CMNIST load_dataset
+    #     train_cmnist = FlippedMNISTSubset(args, config, split='train')
+    #     val_cmnist = FlippedMNISTSubset(args, config, split='val')
+    #     test_cmnist = FlippedMNISTSubset(args, config, split='test')
+
+    #     train_cmnist.input_dims = input_dims
+    #     train_cmnist.input_size = int(np.prod(input_dims))
+    #     train_cmnist.label_size = label_size
+
+    #     # keep these datasets separate for encoding
+    #     # construct dataloaders
+    #     kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
+
+    #     train_loader = DataLoader(
+    #         train_mnist, batch_size, shuffle=True, **kwargs)
+    #     val_loader = DataLoader(
+    #         val_mnist, batch_size, shuffle=False, **kwargs)
+    #     test_loader = DataLoader(
+    #         test_mnist, batch_size, shuffle=False, **kwargs)
+    #     train_loader2 = DataLoader(
+    #         train_cmnist, batch_size, shuffle=True, **kwargs)
+    #     val_loader2 = DataLoader(
+    #         val_cmnist, batch_size, shuffle=False, **kwargs)
+    #     test_loader2 = DataLoader(
+    #         test_cmnist, batch_size, shuffle=False, **kwargs)
+
+    #     return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
+
+    # elif dataset_name in ['MNIST_combined_z']:
+    #     input_dims = 784
+    #     label_size = 10
+    #     lam = 1e-6
+
+    #     train_mnist = ourMNIST(args, config, split='train')
+    #     val_mnist = ourMNIST(args, config, split='val')
+    #     test_mnist = ourMNIST(args, config, split='test')
+
+    #     train_mnist.input_dims = input_dims
+    #     train_mnist.input_size = int(np.prod(input_dims))
+    #     train_mnist.label_size = label_size
+
+    #     #TODO: CMNIST load_dataset
+    #     train_cmnist = FlippedMNIST(args, config, split='train')
+    #     val_cmnist = FlippedMNIST(args, config, split='val')
+    #     test_cmnist = FlippedMNIST(args, config, split='test')
+
+    #     train_cmnist.input_dims = input_dims
+    #     train_cmnist.input_size = int(np.prod(input_dims))
+    #     train_cmnist.label_size = label_size
+
+    #     # keep these datasets separate for encoding
+    #     # construct dataloaders
+    #     kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
+
+    #     train_loader = DataLoader(
+    #         train_mnist, batch_size, shuffle=True, **kwargs)
+    #     val_loader = DataLoader(
+    #         val_mnist, batch_size, shuffle=False, **kwargs)
+    #     test_loader = DataLoader(
+    #         test_mnist, batch_size, shuffle=False, **kwargs)
+    #     train_loader2 = DataLoader(
+    #         train_cmnist, batch_size, shuffle=True, **kwargs)
+    #     val_loader2 = DataLoader(
+    #         val_cmnist, batch_size, shuffle=False, **kwargs)
+    #     test_loader2 = DataLoader(
+    #         test_cmnist, batch_size, shuffle=False, **kwargs)
+
+    #     return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
+
     elif dataset_name in ['TOY', 'MOONS']:  # use own constructors
         train_dataset = load_dataset(dataset_name)(toy_train_size, flip_toy_var_order)
         test_dataset = load_dataset(dataset_name)(toy_test_size, flip_toy_var_order)

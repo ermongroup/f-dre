@@ -1,34 +1,31 @@
 training:
   batch_size: 100
-  n_epochs: 10
+  n_epochs: 200
   ngpu: 1
   log_interval: 100
   iter_save: 100
-  exp_id: "subset_encodings"
-  out_dir: "/atlas/u/madeline/multi-fairgen/src/classification/"
+  out_dir: "/atlas/u/madeline/multi-fairgen/src/flows/results"
   data_dir: "/atlas/u/madeline/multi-fairgen/data/"
 
-sampling:
-  generate: true
-  fair: true
-  n_samples: 3000
-  encode: false
-
 data:
-  dataset: "MNISTSubset_combined"
-  subset: true
+  dataset: "DigitMNISTSubset"
   perc: 0.1
-  digits: [0,7]
-  digit_percs: [0.2, 0.8]
-  flipped_digits: [0, 7]
-  flipped_digit_percs: [0.5, 0.5]
+  biased_digits: [0, 7]
+  biased_digit_percs: [0.5, 0.5]
+  ref_digits: [1, 2]
+  ref_digit_percs: [0.5, 0.5]
   image_size: 28
   channels: 1
   random_flip: false
-  x_space: false
-  class_idx: 20
   num_workers: 4
   flip_toy_var_order: true
+
+dre:
+  alpha: 0.06
+
+sampling:
+  n_samples: 50000
+  # sir: 1000
 
 model:
   name: "maf"
@@ -45,13 +42,6 @@ model:
   no_batch_norm: false
   cond_label_size: 10
   ema: false
-
-dre:
-  alpha: 0.06
-
-sampling:
-  n_samples: 50000
-  sir: 1000
 
 optim:
   weight_decay: 0.000001

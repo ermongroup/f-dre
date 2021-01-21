@@ -37,7 +37,15 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=AttrClassifier --config=mnist/a
 
 -----
 # encoding trained flows
-CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc1.0' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc1.0/best_model_checkpoint.pt --encode --subset=True --perc=1.0
+CUDA_VISIBLE_DEVICES=0 python maf.py \
+--data_dir='/atlas/u/madeline/multi-fairgen/data' \
+--output_dir='/atlas/u/madeline/multi-fairgen/results/subset_maf_perc1.0' \
+--model='maf' --dataset='MNISTSubset_combined_z' \
+--hidden_size=1024 \
+--restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc1.0/best_model_checkpoint.pt \
+--encode \
+--subset=True \
+--perc=1.0
 
 # generate a ton of samples
 CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc0.5' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc0.5/best_model_checkpoint.pt --generate_samples --n-samples=50000 --subset=True --perc=0.5
