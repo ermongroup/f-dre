@@ -1,0 +1,43 @@
+training:
+  batch_size: 128
+  n_epochs: 10
+  ngpu: 1
+  iter_log: 1000
+  iter_save: 100
+  exp_id: "mnist_z_perc0.25"
+  out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/"
+  data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
+
+data:
+  dataset: "MNIST"
+  subset: false
+  image_size: 28
+  channels: 1
+  random_flip: false
+  x_space: false
+  train_perc: 0.8
+  test_perc: 0.1
+  perc: 0.25
+  biased_split: 0.9
+  ref_split: 0.5
+  class_idx: 20
+  num_workers: 4
+
+model:
+  name: "resnet"
+  spectral_norm: true
+  batch_norm: true
+  in_dim: 784
+  h_dim: 100
+  dropout: 0.1
+  n_classes: 2
+
+optim:
+  weight_decay: 0.000
+  optimizer: "Adam"
+  lr: 0.0002
+  beta1: 0.9
+  amsgrad: false
+
+loss:
+  name: "cross_entropy"

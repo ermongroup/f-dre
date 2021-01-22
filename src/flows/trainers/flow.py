@@ -9,16 +9,16 @@ from tqdm import tqdm
 import numpy as np
 import yaml
 
-import utils
-from src.flows.data import fetch_dataloaders
-from src.flows.models.maf import *
-from src.flows.models.ema import EMAHelper
-from src.classification.models.resnet import ResnetClassifier
-from src.classification.models.mlp import MLPClassifier
+import flows.utils as utils
+from datasets.data import fetch_dataloaders
+from flows.models.maf import *
+from flows.models.ema import EMAHelper
+from classification.models.resnet import ResnetClassifier
+from classification.models.mlp import MLPClassifier
 
-from functions import get_optimizer
-from functions.ckpt_util import get_ckpt_path
-from functions.utils import (
+from flows.functions import get_optimizer
+from flows.functions.ckpt_util import get_ckpt_path
+from flows.functions.utils import (
     get_ratio_estimates,
     fairness_discrepancy,
     classify_examples
@@ -65,9 +65,9 @@ class Flow(object):
         
         # if necessary, load (pretrained) density ratio estimates
         if self.args.fair_generate:
-            self.dre_clf = self.load_classifier(self.args, 'resnet')
-        if self.args.sample:
-            self.attr_clf = self.load_classifier(self.args, 'mlp')
+            self.dre_clf = self.load_classifier(args, self.args.dre_clf_ckpt)
+        if self.args.sample and self.args.attr_clf_ckpt is not None:
+            self.attr_clf = self.load_classifier(args, self.args.attr_clf_ckpt)
 
     def get_model(self):
         # TODO: do something about these args
@@ -77,23 +77,21 @@ class Flow(object):
             raise ValueError('Unrecognized model.')
         return model
 
-    def load_classifier(self, args, name):
-        if name == 'resnet':
-            clf = ResnetClassifier(args)
-            ckpt_path = args.clf_ckpt
-        else:
-            # with open(os.path.join('src/classification/configs', args.config), 'r') as f:
-            # TODO: HACK
-            with open(os.path.join('src/classification/configs/mnist/attr_bkgd.yaml')) as f:
-                config = yaml.load(f)
-            config = dict2namespace(config)
-            clf = MLPClassifier(config)
-            # mnist_attr = 'digit' if args.subset else 'background'
-            mnist_attr = 'background'
-            ckpt_path = ATTR_CLFS[mnist_attr]
-        assert os.path.exists(ckpt_path)
-        print('loading pre-trained DRE classifier checkpoint from {}'.format(ckpt_path))
+    def load_classifier(self, args, ckpt_path):
+        config_path = os.path.dirname(os.path.dirname(ckpt_path.rstrip('/')))
+        with open(os.path.join(config_path, 'config.yaml')) as f:
+            config = yaml.safe_load(f)
+        config = dict2namespace(config)
 
+        if config.model.name == 'resnet':
+            clf = ResnetClassifier(args)
+        elif config.model.name == 'mlp':
+            clf = MLPClassifier(config)
+        else:
+            raise NotImplementedError(f'Classification model [{config.model.name}] not implemented.')
+        
+        assert os.path.exists(ckpt_path)
+        
         # load state dict
         state_dict = torch.load(ckpt_path)['state_dict']
         clf.load_state_dict(state_dict)
@@ -237,7 +235,7 @@ class Flow(object):
         elif self.args.encode_z:
             self.encode_z(self.args, model)
         elif self.args.fair_generate:
-            self.fair_generate(self.args, model)
+            self.fair_generate(self.args, self.config, model)
         else:
             raise NotImplementedError("Sampling procedure not defined")
 
@@ -267,7 +265,8 @@ class Flow(object):
         all_samples = []
         preds = []
         model.eval()
-        self.attr_clf.eval()
+        if self.args.attr_clf_ckpt is not None:
+            self.attr_clf.eval() 
 
         print('generating {} samples in batches of 1000...'.format(self.config.sampling.n_samples))
         n_batches = int(self.config.sampling.n_samples // 1000)
@@ -294,8 +293,8 @@ class Flow(object):
         all_samples = np.vstack(all_samples)
         preds = np.hstack(preds)
         fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
-        np.savez(os.path.join(args.out_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'samples'), **{'x': all_samples})
-        np.savez(os.path.join(args.out_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'metrics'), 
+        np.savez(os.path.join(self.args.out_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'samples'), **{'x': all_samples})
+        np.savez(os.path.join(self.args.out_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'metrics'), 
             **{'preds': preds,
             'l2_fair_disc': fair_disc_l2,
             })
@@ -311,7 +310,7 @@ class Flow(object):
 
         # data
         dataset = self.config.data.dataset
-        train_dataloader, val_dataloader, test_dataloader = fetch_dataloaders(dataset, self.config.training.batch_size, self.device, self.args, self.config, self.config.data.flip_toy_var_order)
+        train_dataloader, val_dataloader, test_dataloader = fetch_dataloaders(dataset, self.config.training.batch_size, self.device, args, self.config, self.config.data.flip_toy_var_order)
 
         # separate out biased mnist and ref mnist
         train_biased, train_ref = train_dataloader
@@ -371,7 +370,8 @@ class Flow(object):
 
         model.eval()
         self.dre_clf.eval()
-        self.attr_clf.eval()
+        if self.args.attr_clf_ckpt is not None:
+            self.attr_clf.eval()
 
         alpha = config.dre.alpha
         if alpha > 0:
@@ -402,7 +402,8 @@ class Flow(object):
             samples = torch.clamp(samples, 0., 1.)
 
             # get classifier predictions
-            logits, probas = self.attr_clf(samples.view(len(samples), -1))
+            if self.args.attr_clf_ckpt is not None:
+                logits, probas = self.attr_clf(samples.view(len(samples), -1))
             _, pred = torch.max(probas, 1)
 
             # save things

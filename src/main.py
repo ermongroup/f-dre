@@ -10,8 +10,10 @@ import numpy as np
 import torch.utils.tensorboard as tb
 sys.path.append(os.path.abspath(os.getcwd()))
 
-from trainers.flow import Flow
-# from trainers.classifier import Classifier
+from flows.trainers.flow import Flow
+from classification.trainers.classifier import Classifier
+from classification.trainers.attr_classifier import AttrClassifier
+
 import getpass
 import wandb
 
@@ -50,10 +52,12 @@ def parse_args_and_config():
     
     # ======== Classification-related (TODO: integrate classifier and flow into same main.py?) ========
     parser.add_argument('--classify', action='store_true', help='To run classification')
-
+    parser.add_argument('--attr', default=None, help='For attr classification, provide one of \{\'background\', \'digit\'\}')
+    # parser.add_argument('--dre', action='store_true', help='Run DRE classification of z-encodings')  
+    
+    # parse args and config
     args = parser.parse_args()
-    # parse config file
-    with open(os.path.join('src/flows/configs', args.config), 'r') as f:
+    with open(os.path.join('configs', args.config), 'r') as f:
         config = yaml.safe_load(f)
     new_config = dict2namespace(config)
 
@@ -63,7 +67,7 @@ def parse_args_and_config():
 
     args.out_dir = os.path.join(new_config.training.out_dir, args.exp_id)
     args.log_path = os.path.join(args.out_dir, 'logs')
-
+    os.makedirs(args.out_dir, exist_ok=True)
     # set up wandb
     if not args.sample:
         # only for training
@@ -108,8 +112,8 @@ def parse_args_and_config():
             else:
                 os.makedirs(args.log_path)
 
-            with open(os.path.join(args.log_path, 'config.yml'), 'w') as f:
-                yaml.dump(new_config, f, default_flow_style=False)
+            with open(os.path.join(args.out_dir, 'config.yaml'), 'w') as f:
+                yaml.dump(config, f, default_flow_style=False)
 
         # setup logger
         level = getattr(logging, args.verbose.upper(), None)
@@ -145,20 +149,40 @@ def dict2namespace(config):
 
 def main():
     args, config = parse_args_and_config()
+    logging.info('Saving output to {}'.format(args.out_dir))
     logging.info('Writing log file to {}'.format(args.log_path))
     logging.info('Exp instance id = {}'.format(os.getpid()))
-    # logging.info('Exp comment = {}'.format(args.comment))
 
     try:
-        # if args.classify:
-        #     trainer = Classifier(args, config)
-        # else:
-        trainer = Flow(args, config)
+        if args.classify:
+            if args.attr is not None:
+                trainer = AttrClassifier(args, config)
+            else:
+                trainer = Classifier(args, config)
+        else:
+            trainer = Flow(args, config)
+        
         if args.sample:
             trainer.sample(args)
         elif args.test:
             trainer.test()
-            # if not args.classify:
+        else:
+            trainer.train()
+            if args.classify:
+                test_loss, test_acc, test_labels, test_probs, test_ratios = trainer.test(trainer.test_dataloader, 'test')
+                trainer.clf_diagnostics(test_labels, test_probs, test_ratios, 'test')
+    
+    except Exception:
+        logging.error(traceback.format_exc())
+
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
+
+# cut out of "elif args.test:" block:
+# if not args.classify:
             #     trainer.test()  # NOTE: this doesn't work for classifier atm
             # else:
             #     # TODO: FIX THIS (this is the classifier!)
@@ -179,13 +203,3 @@ def main():
             #     state_dict = torch.load(os.path.join(args.log_path, 'clf_ckpt.pth'))[0]
             #     model.load_state_dict(state_dict)
             #     trainer.test(model, loader)
-        else:
-            trainer.train()
-    except Exception:
-        logging.error(traceback.format_exc())
-
-    return 0
-
-
-if __name__ == '__main__':
-    sys.exit(main())

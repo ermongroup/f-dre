@@ -169,7 +169,8 @@ class MNISTSubset(ourMNIST):
             digit_idxs = torch.where(targets == digit)[0]
             
             # balanced digit split for test/val set; split by digit_percs for train
-            if not config.data.include_all:
+            if not config.data.includ
+            e_all:
                 n_digit_samples = int(perc * n_samples_needed) if split == 'train' else int(n_samples_needed.item() // len(self.digits))
             else:
                 n_digit_samples = len(digit_idxs)

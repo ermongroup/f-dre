@@ -7,15 +7,11 @@ from pprint import pprint
 from tqdm import tqdm
 import numpy as np
 
-import utils
-import dsets
-from dsets.flipped_mnist import (
-    SplitEncodedMNIST,
-    SplitMNIST
-)
-from models.mlp import MLPClassifier
-from models.resnet import ResnetClassifier
-from trainers.base import BaseTrainer
+import classification.utils as utils
+from datasets.data import fetch_dataloaders
+from classification.models.mlp import MLPClassifier
+from classification.models.resnet import ResnetClassifier
+from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
 
 import torch
@@ -32,9 +28,6 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-
 class Classifier(BaseTrainer):
     def __init__(self, args, config):
         self.args = args
@@ -48,11 +41,12 @@ class Classifier(BaseTrainer):
         self.loss = self.get_loss()
 
         # get data
-        self.train_dataloader, self.val_dataloader, self.test_dataloader = self.get_datasets()
+        self.train_dataloader, self.val_dataloader, self.test_dataloader = fetch_dataloaders(config.data.dataset, config.training.batch_size, self.device, args, config)
 
         # saving
-        self.checkpoint_dir = config.ckpt_dir
-        self.output_dir = config.out_dir
+        self.output_dir = args.out_dir
+        self.checkpoint_dir = os.path.join(self.output_dir, 'checkpoints')
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
 
     def get_model(self):
         model = self.get_model_cls(self.config.model.name)

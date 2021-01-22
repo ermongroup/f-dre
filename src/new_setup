@@ -40,19 +40,45 @@ CUDA_VISIBLE_DEVICES=1 python3 src/classification/main.py --trainer=Classifier -
 
 
 ---------- JAN 21 CLEANUP ----------
+# Run everything from /multi-fairgen/src
 
 # Train flow. Output will be in /config.training.out_dir/exp_id/
-python3 src/flows/main.py \
-        --config mnist_subset/digits_mnist_subset.yaml \
-        --exp_id=digits_mnist_subset_perc$perc \
+python3 main.py \
+        --config flows/same_bkgd/perc0.1.yaml \
+        --exp_id=digits_mnist_subset_perc0.1 \
         --ni
 
 # Generate encodings. Make sure perc in --exp_id is same as perc in digits_mnist_subset.yaml
-python3 src/flows/main.py \
-            --config mnist_subset/digits_mnist_subset.yaml  \
-            --exp_id encode_digits_subset_perc0.1 \
-            --restore_file=/atlas/u/madeline/multi-fairgen/src/flows/results/digits_mnist_subset_perc0.1/ \
-            --sample \
-            --encode_z
-# classify encodings (train DRE clf) (TODO)
-# sample from flow with DRE clf (TODO)
+python3 main.py \
+        --config flows/mnist_subset/digits_mnist_subset.yaml  \
+        --exp_id encode_digits_subset_perc0.1 \
+        --restore_file=/atlas/u/madeline/multi-fairgen/src/flows/results/digits_mnist_subset_perc0.1/ \
+        --sample \
+        --encode_z \
+        --ni
+
+# Train DRE classifier on encodings
+python3 main.py \
+        --classify \
+        --config classification/mnist_subset/digit_encodings.yaml  \
+        --exp_id maf_classify_encodings_perc0.1 \
+        --ni
+
+# Train attribute classifier
+python3 main.py \
+        --classify \
+        --attr=digit \
+        --config classification/same_bkgd/attr_digits.yaml  \
+        --exp_id maf_digits_attr_clf0.1 \
+        --ni
+
+# Reweighted sampling from flow with DRE clf + SIR
+python3 main.py \
+        --sample \
+        --fair_generate \
+        --config flows/mnist_subset/digits_mnist_subset_perc0.1.yaml  \
+        --exp_id maf_fair_generate_perc0.1 \
+        --dre_clf_ckpt=/atlas/u/madeline/multi-fairgen/src/classification/results/maf_classify_encodings_perc0.1/checkpoints/model_best.pth \
+        --attr_clf_ckpt=<INSERT ATTR CLF CKPT HERE>
+        --restore_file=/atlas/u/madeline/multi-fairgen/src/flows/results/digits_mnist_subset_perc0.1 \
+        --ni
