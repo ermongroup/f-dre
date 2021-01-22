@@ -56,3 +56,24 @@ python3 src/flows/main.py \
             --encode_z
 # classify encodings (train DRE clf) (TODO)
 # sample from flow with DRE clf (TODO)
+CUDA_VISIBLE_DEVICES=0 python3 src/flows/main.py \
+            --config mnist_subset/digits_mnist_subset.yaml \  
+            --exp mnist_same_bkgd_perc0.1 \
+            --doc mnist_same_bkgd_perc0.1 \ 
+            --data_dir='/atlas/u/kechoi/multi-fairgen/data' \
+            --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/mnist_same_bkgd_perc0.1/' \
+            --restore_file=/atlas/u/madeline/multifairgen/src/flows/results/maf_same_bkgd_perc0.1/ \
+            --clf_ckpt=/atlas/u/madeline/multi-fairgen/src/classifier/results/mnist_same_bkgd_z_perc0.1/checkpoints/model_best.pth \
+            --reweight --sample --fair_generate
+
+---
+(Trained models)
+(flows)
+/atlas/u/madeline/multifairgen/src/flows/results/maf_same_bkgd_perc{PERC}/best_model_checkpoint.pt
+
+(classifiers)
+/atlas/u/madeline/multi-fairgen/src/classifier/results/mnist_same_bkgd_z_perc0.5/checkpoints/model_best.pth
+
+
+----
+CUDA_VISIBLE_DEVICES=0 python3 src/flows/main.py --config mnist_subset/digits_mnist_subset.yaml --exp_id mnist_same_bkgd_perc0.1 --restore_file=/atlas/u/madeline/multi-fairgen/src/flows/results/maf_same_bkgd_perc0.1/ --dre_clf_ckpt=/atlas/u/madeline/multi-fairgen/src/classification/results/mnist_same_bkgd_z_perc0.1/checkpoints/ --sample --fair_generate

@@ -62,6 +62,8 @@ def parse_args_and_config():
     new_config.device = device
 
     args.out_dir = os.path.join(new_config.training.out_dir, args.exp_id)
+    if not os.path.exists(args.out_dir):
+        os.makedirs(args.out_dir)
     args.log_path = os.path.join(args.out_dir, 'logs')
 
     # set up wandb
