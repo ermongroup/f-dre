@@ -7,7 +7,7 @@ sys.path.append('../')
 import torch
 from abc import abstractmethod
 from numpy import inf
-from logger import *
+# from logger import *
 
 
 class BaseTrainer:

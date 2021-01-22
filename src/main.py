@@ -11,6 +11,7 @@ import torch.utils.tensorboard as tb
 sys.path.append(os.path.abspath(os.getcwd()))
 
 from flows.trainers.flow import Flow
+from flows.trainers.toy_flow import ToyFlow
 from classification.trainers.classifier import Classifier
 from classification.trainers.attr_classifier import AttrClassifier
 
@@ -162,7 +163,10 @@ def main():
             else:
                 trainer = Classifier(args, config)
         else:
-            trainer = Flow(args, config)
+            if config.data.dataset != 'GMM':
+                trainer = Flow(args, config)
+            else:
+                trainer = ToyFlow(args, config)
         
         if args.sample:
             trainer.sample(args)

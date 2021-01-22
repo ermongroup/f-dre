@@ -12,6 +12,7 @@ from .cmnist import (
     MNISTSubset,
     SplitEncodedMNIST
 )
+from .toy import GMM, GaussianMixtures
 
 # --------------------
 # Helper functions
@@ -221,6 +222,15 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         train_dataset = SplitEncodedMNIST(config, split='train')
         val_dataset = SplitEncodedMNIST(config, split='val')
         test_dataset = SplitEncodedMNIST(config, split='test')
+
+    elif dataset_name in ['GMM']:
+        input_dims = 2
+        label_size = 1
+        lam = 1e-6
+
+        train_dataset = GaussianMixtures(args, config, split='train')
+        val_dataset = GaussianMixtures(args, config, split='val')
+        test_dataset = GaussianMixtures(args, config, split='test')
 
     elif dataset_name in ['TOY', 'MOONS']:  # use own constructors
         train_dataset = load_dataset(dataset_name)(toy_train_size, flip_toy_var_order)

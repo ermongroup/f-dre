@@ -28,6 +28,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+
 class Classifier(BaseTrainer):
     def __init__(self, args, config):
         self.args = args

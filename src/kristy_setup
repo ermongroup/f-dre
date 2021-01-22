@@ -1,0 +1,5 @@
+# toy flow
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/gmm/perc0.1.yaml --exp_id=gmm_perc0.1 --ni
+
+# train toy classifier (on x)
+python3 main.py --classify --config classification/gmm/mlp.yaml  --exp_id gmm_perc0.1 --ni

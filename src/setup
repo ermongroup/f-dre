@@ -1,59 +1,43 @@
-CUDA_VISIBLE_DEVICES=0 python maf.py --train --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf' --model='maf' --dataset='MNIST_combined' --hidden_size=1024
+---------- JAN 21 CLEANUP ----------
+# Run everything from /multi-fairgen/src
 
-# encode z's
-CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf' --model='maf' --dataset='MNIST_combined_z' --hidden_size=1024 --restore_file /atlas/u/kechoi/multi-fairgen/results/maf/best_model_checkpoint.pt --encode
+# Train flow. Output will be in /config.training.out_dir/exp_id/
+python3 main.py \
+        --config flows/same_bkgd/perc0.1.yaml \
+        --exp_id=digits_mnist_subset_perc0.1 \
+        --ni
 
-# train classifier
-CUDA_VISIBLE_DEVICES=0 python3 classifier/trainer.py
+# Generate encodings. Make sure perc in --exp_id is same as perc in digits_mnist_subset.yaml
+python3 main.py \
+        --config flows/mnist_subset/digits_mnist_subset.yaml  \
+        --exp_id encode_digits_subset_perc0.1 \
+        --restore_file=/atlas/u/madeline/multi-fairgen/src/flows/results/digits_mnist_subset_perc0.1/ \
+        --sample \
+        --encode_z \
+        --ni
 
-(in x-space)
-CUDA_VISIBLE_DEVICES=1 python3 classifier/trainer.py --x_space=True --out_dir=/atlas/u/kechoi/multi-fairgen/classifier/mnist_x_results
+# Train DRE classifier on encodings
+python3 main.py \
+        --classify \
+        --config classification/mnist_subset/digit_encodings.yaml  \
+        --exp_id maf_classify_encodings_perc0.1 \
+        --ni
 
+# Train attribute classifier
+python3 main.py \
+        --classify \
+        --attr=digit \
+        --config classification/same_bkgd/attr_digits.yaml  \
+        --exp_id maf_digits_attr_clf0.1 \
+        --ni
 
-
-# train regular flow
-CUDA_VISIBLE_DEVICES=0 python maf.py --train --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf_perc1.0' --model='maf' --dataset='MNIST_combined' --hidden_size=1024 --perc=1.0 --n_epochs=200
-
-# encode z
-CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/maf_perc1.0' --model='maf' --dataset='MNIST_combined_z' --hidden_size=1024 --restore_file /atlas/u/kechoi/multi-fairgen/results/maf_perc1.0/best_model_checkpoint.pt --encode
-
-CUDA_VISIBLE_DEVICES=0 python3 classifier/trainer.py --out_dir=/atlas/u/kechoi/multi-fairgen/classifier/mnist_perc1_results
-
-
------------------------------
-# REFACTORED CODE!!!!!! (START HERE)
-# try training classifier (DRE)
-CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=Classifier --config=mnist/resnet.yaml
-
-CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=Classifier --config=mnist_subset/resnet.yaml
-
-------
-# try training classifier (attribute: 0/7 attr_digits)
-CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=AttrClassifier --config=mnist_subset/attr_digits.yaml
-
-# try training classifier (attribute: background color)
-CUDA_VISIBLE_DEVICES=0 python3 main.py --trainer=AttrClassifier --config=mnist/attr_bkgd.yaml
-
-
------
-# encoding trained flows
-CUDA_VISIBLE_DEVICES=0 python maf.py \
---data_dir='/atlas/u/madeline/multi-fairgen/data' \
---output_dir='/atlas/u/madeline/multi-fairgen/results/subset_maf_perc1.0' \
---model='maf' --dataset='MNISTSubset_combined_z' \
---hidden_size=1024 \
---restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc1.0/best_model_checkpoint.pt \
---encode \
---subset=True \
---perc=1.0
-
-# generate a ton of samples
-CUDA_VISIBLE_DEVICES=0 python maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc0.5' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc0.5/best_model_checkpoint.pt --generate_samples --n-samples=50000 --subset=True --perc=0.5
-
-# new updated one with pretrained clf
-CUDA_VISIBLE_DEVICES=1 python src/flows/maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/results/subset_maf_perc1.0' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc1.0/best_model_checkpoint.pt --generate_samples --subset=True --perc=1.0 --clf-ckpt=/atlas/u/kechoi/multi-fairgen/src/classification/checkpoints/mnist_subset_z_perc1.0/model_best.pth --n-samples=2000
-
-# fair generate?
-CUDA_VISIBLE_DEVICES=1 python src/flows/maf.py --data_dir='/atlas/u/kechoi/multi-fairgen/data' --output_dir='/atlas/u/kechoi/multi-fairgen/src/flows/results/subset_maf_perc0.1' --model='maf' --dataset='MNISTSubset_combined_z' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc0.1/best_model_checkpoint.pt --subset=True --perc=0.1 --clf-ckpt=/atlas/u/kechoi/multi-fairgen/src/classification/checkpoints/mnist_subset_z_perc0.1/model_best.pth --generate_samples --fair-generate --n-samples=5000 --alpha=0.06 --digits 0 7 --digit_percs 0.9 0.1 --flipped_digit_percs 0.5 0.5 --flipped_digits 0 7 --config mnist/attr_bkgd.yaml
-
-python src/flows/maf.py --data_dir=/atlas/u/madeline/multi-fairgen/data --output_dir=/atlas/u/madeline/multi-fairgen/results/ --model='maf' --dataset='MNISTSubset' --hidden_size=1024 --restore_file /atlas/u/madeline/multi-fairgen/results/maf/subset_perc0.1/best_model_checkpoint.pt --subset=True --perc=0.1 --generate_samples --n-samples=2000 
+# Reweighted sampling from flow with DRE clf + SIR
+python3 main.py \
+        --sample \
+        --fair_generate \
+        --config flows/mnist_subset/digits_mnist_subset_perc0.1.yaml  \
+        --exp_id maf_fair_generate_perc0.1 \
+        --dre_clf_ckpt=/atlas/u/madeline/multi-fairgen/src/classification/results/maf_classify_encodings_perc0.1/checkpoints/model_best.pth \
+        --attr_clf_ckpt=<INSERT ATTR CLF CKPT HERE>
+        --restore_file=/atlas/u/madeline/multi-fairgen/src/flows/results/digits_mnist_subset_perc0.1 \
+        --ni
