@@ -295,7 +295,6 @@ class Flow(object):
             all_samples.append(samples.detach().cpu().numpy())
         all_samples = np.vstack(all_samples)
         preds = np.hstack(preds)
-        print('prop of 1s:', np.sum(preds)/len(preds))
         fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
         np.savez(os.path.join(self.args.out_dir, 'samples'), **{'x': all_samples})
         np.savez(os.path.join(self.args.out_dir, 'metrics'), 
@@ -304,7 +303,7 @@ class Flow(object):
             })
         # maybe just save some samples just for visualizations?
         filename = 'samples'+ '.png'
-        save_image(torch.from_numpy(all_samples[0:100]), os.path.join(self.args.out_dir, filename), nrow=n_row, normalize=True)
+        save_image(torch.Tensor(all_samples[0:100]), os.path.join(self.args.out_dir, filename), nrow=n_row, normalize=True)
 
     @torch.no_grad()
     def encode_z(self, args, model):
@@ -452,7 +451,7 @@ class Flow(object):
             filename = 'fair_samples_sir_alpha={}'.format(self.config.dre.alpha) + '.png'
         else:
             filename = 'fair_samples_baseline.png'
-        save_image(torch.from_numpy(all_samples[:100]), os.path.join(args.out_dir, filename), nrow=n_row, normalize=True)
+        save_image(torch.from_numpy(all_samples), os.path.join(args.out_dir, filename), nrow=n_row, normalize=True)
 
 
 def dict2namespace(config):

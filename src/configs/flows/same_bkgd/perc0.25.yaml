@@ -21,10 +21,11 @@ data:
   flip_toy_var_order: true
 
 dre:
-  alpha: 0.06
+  alpha: 0
 
 sampling:
   n_samples: 50000
+  n_sir: 50000
   # sir: 1000
 
 model:

@@ -11,7 +11,7 @@ data:
   dataset: "SplitEncodedMNIST"
   encoding_model: "maf"
   encoded_dataset: "DigitMNISTSubset"
-  perc: 0.1
+  perc: 1.0
   image_size: 28
   channels: 1
   random_flip: false

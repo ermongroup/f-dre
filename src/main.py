@@ -47,6 +47,9 @@ def parse_args_and_config():
     parser.add_argument('--fair_generate', action='store_true', help='Sample with DRE reweighting using SIR. Must specify --dre_clf_ckpt.')
     parser.add_argument('--fid', action='store_true', help='FID sampling')
     
+    # ======== Params for --fair_generate ========
+    parser.add_argument('--alpha', type=float, default=0, help='alpha for DRE flattening')
+    
     # ======== Sampling classifiers: --attr_clf_ckpt for classifying sample attributes, --dre_clf_ckpt for --fair-generate ========
     parser.add_argument('--attr_clf_ckpt', default=None, help='Path to pretrained attribute classifier checkpoint; if provided, classify the flow samples.')
     parser.add_argument('--dre_clf_ckpt', default=None, help='Path to pretrained DRE classifier checkpoint to use for reweighting.')
