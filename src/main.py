@@ -141,12 +141,23 @@ def parse_args_and_config():
 
 def dict2namespace(config):
     namespace = argparse.Namespace()
-    for key, value in config.items():
-        if isinstance(value, dict):
-            new_value = dict2namespace(value)
-        else:
-            new_value = value
-        setattr(namespace, key, new_value)
+    if isinstance(config, list):
+        # from creating config files
+        for i in range(len(config)):
+            for key, value in config[i].items():
+                if isinstance(value, dict):
+                    new_value = dict2namespace(value)
+                else:
+                    new_value = value
+                setattr(namespace, key, new_value)
+    else:
+        # vanilla training
+        for key, value in config.items():
+            if isinstance(value, dict):
+                new_value = dict2namespace(value)
+            else:
+                new_value = value
+            setattr(namespace, key, new_value)
     return namespace
 
 
@@ -163,7 +174,7 @@ def main():
             else:
                 trainer = Classifier(args, config)
         else:
-            if config.data.dataset != 'GMM':
+            if config.data.dataset not in ['GMM', 'GMM_flow']:
                 trainer = Flow(args, config)
             else:
                 trainer = ToyFlow(args, config)
@@ -175,8 +186,8 @@ def main():
         else:
             trainer.train()
             if args.classify:
-                test_loss, test_acc, test_labels, test_probs, test_ratios = trainer.test(trainer.test_dataloader, 'test')
-                trainer.clf_diagnostics(test_labels, test_probs, test_ratios, 'test')
+                test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
+                trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
     
     except Exception:
         logging.error(traceback.format_exc())

@@ -1,10 +1,10 @@
 training:
   batch_size: 128
-  n_epochs: 10
+  n_epochs: 20
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "gmm_perc0.1"
+  exp_id: "gmm_flow_mlp_perc1.0"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
@@ -13,27 +13,26 @@ data:
   subset: false
   x_space: true
   input_size: 2
-  perc: 0.1
+  perc: 1.0
   mus: [0, 3]
-  perc: 0.1
   class_idx: 20
   num_workers: 4
 
 model:
-  name: "mlp"
+  name: "flow_mlp"
   spectral_norm: true
   batch_norm: true
   in_dim: 2
-  h_dim: 100
+  h_dim: 200
   dropout: 0.1
   n_classes: 2
 
 optim:
-  weight_decay: 0.000
+  weight_decay: 0.0005
   optimizer: "Adam"
   lr: 0.0002
   beta1: 0.9
   amsgrad: false
 
 loss:
-  name: "cross_entropy"
+  name: "bce"

@@ -1,5 +1,55 @@
 # toy flow
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/gmm/perc0.1.yaml --exp_id=gmm_perc0.1 --ni
 
+# what about 1.0?
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/gmm/perc1.0.yaml --exp_id=gmm_perc1.0 --ni
+
+
 # train toy classifier (on x)
-python3 main.py --classify --config classification/gmm/mlp.yaml  --exp_id gmm_perc0.1 --ni
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/mlp.yaml  --exp_id gmm_perc0.1 --ni
+
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/mlp_perc1.0.yaml  --exp_id gmm_perc1.0 --ni
+
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/mlp_perc1.0.yaml  --exp_id gmm_perc1.0_v2 --ni
+
+-----
+# Generate encodings. Make sure perc in --exp_id is same as perc in digits_mnist_subset.yaml
+python3 main.py --config flows/gmm/perc0.1.yaml --exp_id encode_gmm_perc0.1 --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/gmm_perc0.1/ --sample --encode_z --ni
+
+python3 main.py --config flows/gmm/perc1.0.yaml --exp_id encode_gmm_perc1.0 --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/gmm_perc1.0/ --sample --encode_z --ni
+
+(i had to rename the data folder from GMM_flow to GMM)
+# classify in z-space
+CUDA_VISIBLE_DEVICES=1 python3 main.py --classify --config classification/gmm/mlp_z.yaml  --exp_id gmm_z_perc0.1 --ni
+
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/mlp_z_perc1.0.yaml  --exp_id gmm_z_perc1.0 --ni
+
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/mlp_z_perc1.0.yaml  --exp_id gmm_z_perc1.0_v2 --ni
+
+# Generate samples
+python3 main.py --config flows/gmm/perc1.0.yaml --exp_id encode_gmm_perc1.0 --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/gmm_perc1.0/ --sample --encode_z --ni
+
+
+
+-------
+# GAUSSIAN DATASET
+(X-SPACE BASELINE)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/mlp_perc1.0.yaml  --exp_id gmm_perc1.0_v2 --ni
+
+
+(MY METHOD)
+1. train flow
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/gmm/perc1.0.yaml --exp_id=gmm_perc1.0 --ni
+
+2. get encodings
+python3 main.py --config flows/gmm/perc1.0.yaml --exp_id encode_gmm_perc1.0 --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/gmm_perc1.0/ --sample --encode_z --ni
+
+3. train classifier
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/mlp_z_perc1.0.yaml  --exp_id gmm_z_perc1.0_v2 --ni
+
+
+# (PURELY DISCRIMINATIVE BASELINE)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/flow_mlp_perc1.0.yaml  --exp_id gmm_flow_mlp_perc1.0 --ni
+
+# (JOINT BASELINE)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/joint_flow_mlp_perc1.0.yaml  --exp_id joint_test --ni

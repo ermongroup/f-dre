@@ -274,8 +274,13 @@ class Flow(object):
             if (n % 10 == 0) and (n > 0):
                 print('on iter {}/{}'.format(n, n_batches))
             u = model.module.base_dist.sample(
-                (1000, self.config.model.n_components)).squeeze()
+                (100, self.config.model.n_components)).squeeze()
             samples, _ = model.module.inverse(u)
+            while torch.any(torch.isnan(samples)):
+                print('got nans, resampling...')
+                u = model.module.base_dist.sample(
+                    (100, self.config.model.n_components)).squeeze()
+                samples, _ = model.module.inverse(u)
             # sort by log_prob; take argsort idxs; flip high to low
             log_probs = model.module.log_prob(samples).sort(0)[1].flip(0)
             samples = samples[log_probs]

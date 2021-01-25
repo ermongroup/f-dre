@@ -12,7 +12,11 @@ from .cmnist import (
     MNISTSubset,
     SplitEncodedMNIST
 )
-from .toy import GMM, GaussianMixtures
+from .toy import (
+    Gaussian, 
+    GaussianMixtures, 
+    EncodedGaussianMixtures
+)
 
 # --------------------
 # Helper functions
@@ -39,21 +43,7 @@ def load_dataset(name):
 def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_var_order=False, toy_train_size=25000, toy_test_size=5000):
     val_dataset = None
     # grab datasets
-    if dataset_name in ['GAS', 'POWER', 'HEPMASS', 'MINIBOONE', 'BSDS300']:  # use the constructors by MAF authors
-        dataset = load_dataset(dataset_name)()
-
-        # join train and val data again
-        train_data = np.concatenate((dataset.trn.x, dataset.val.x), axis=0)
-
-        # construct datasets
-        train_dataset = TensorDataset(torch.from_numpy(train_data.astype(np.float32)))
-        test_dataset  = TensorDataset(torch.from_numpy(dataset.tst.x.astype(np.float32)))
-
-        input_dims = dataset.n_dims
-        label_size = None
-        lam = None
-
-    elif dataset_name in ['MNIST']:
+    if dataset_name in ['MNIST']:
         dataset = load_dataset(dataset_name)()
 
         # join train and val data again
@@ -223,24 +213,57 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         val_dataset = SplitEncodedMNIST(config, split='val')
         test_dataset = SplitEncodedMNIST(config, split='test')
 
+    elif dataset_name in ['GMM_flow']:
+        input_dims = 2
+        label_size = 1
+        lam = 1e-6
+
+        train_biased = Gaussian(args, config, 'bias', split='train')
+        val_biased = Gaussian(args, config, 'bias', split='val')
+        test_biased = Gaussian(args, config, 'bias', split='test')
+
+        train_ref = Gaussian(args, config, 'ref', split='train')
+        val_ref = Gaussian(args, config, 'ref', split='val')
+        test_ref = Gaussian(args, config, 'ref', split='test')
+
+        if args.encode_z:
+            # keep each dataset separate for encoding
+            for dataset in (train_biased, train_ref):
+                dataset.input_dims = input_dims
+                dataset.input_size = int(np.prod(input_dims))
+                dataset.label_size = label_size
+            
+            kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
+
+            train_loader_biased = DataLoader(train_biased, batch_size, shuffle=True, **kwargs)
+            val_loader_biased = DataLoader(val_biased, batch_size, shuffle=False, **kwargs)
+            test_loader_biased = DataLoader(test_biased, batch_size, shuffle=False, **kwargs)
+            train_loader_ref = DataLoader(train_ref, batch_size, shuffle=True, **kwargs)
+            val_loader_ref = DataLoader(val_ref, batch_size, shuffle=False, **kwargs)
+            test_loader_ref = DataLoader(test_ref, batch_size, shuffle=False, **kwargs)
+
+            return [train_loader_biased, train_loader_ref], [val_loader_biased, val_loader_ref], [test_loader_biased, test_loader_ref]
+
+        train_dataset = ConcatDataset([train_biased, train_ref])
+        val_dataset = ConcatDataset([val_biased, val_ref])
+        test_dataset = ConcatDataset([test_biased, test_ref])
+
     elif dataset_name in ['GMM']:
         input_dims = 2
         label_size = 1
         lam = 1e-6
 
-        train_dataset = GaussianMixtures(args, config, split='train')
-        val_dataset = GaussianMixtures(args, config, split='val')
-        test_dataset = GaussianMixtures(args, config, split='test')
-
-    elif dataset_name in ['TOY', 'MOONS']:  # use own constructors
-        train_dataset = load_dataset(dataset_name)(toy_train_size, flip_toy_var_order)
-        test_dataset = load_dataset(dataset_name)(toy_test_size, flip_toy_var_order)
-
-        input_dims = train_dataset.input_size
-        label_size = train_dataset.label_size
-        lam = None
-
-    
+        if config.data.x_space:  # x-space
+            train_dataset = GaussianMixtures(args, config, split='train')
+            val_dataset = GaussianMixtures(args, config, split='val')
+            test_dataset = GaussianMixtures(args, config, split='test')
+        else:
+            # z-space
+            print('using encodings in z-space...')
+            train_dataset = EncodedGaussianMixtures(
+                args, config, split='train')
+            val_dataset = EncodedGaussianMixtures(args, config, split='val')
+            test_dataset = EncodedGaussianMixtures(args, config, split='test')
 
     # imaging dataset pulled from torchvision
     elif dataset_name in ['CIFAR10']:

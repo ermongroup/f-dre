@@ -4,16 +4,15 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "gmm_perc0.1"
+  exp_id: "gmm_z_perc0.1"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
 data:
   dataset: "GMM"
   subset: false
-  x_space: true
+  x_space: false
   input_size: 2
-  perc: 0.1
   mus: [0, 3]
   perc: 0.1
   class_idx: 20
