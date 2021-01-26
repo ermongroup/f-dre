@@ -268,8 +268,8 @@ class Flow(object):
         if self.args.attr_clf_ckpt is not None:
             self.attr_clf.eval() 
 
-        print('generating {} samples in batches of 1000...'.format(self.config.sampling.n_samples))
-        n_batches = int(self.config.sampling.n_samples // 1000)
+        print('generating {} samples in batches of 100...'.format(self.config.sampling.n_samples))
+        n_batches = int(self.config.sampling.n_samples // 100)
         for n in range(n_batches):
             if (n % 10 == 0) and (n > 0):
                 print('on iter {}/{}'.format(n, n_batches))
@@ -277,10 +277,11 @@ class Flow(object):
                 (100, self.config.model.n_components)).squeeze()
             samples, _ = model.module.inverse(u)
             while torch.any(torch.isnan(samples)):
-                print('got nans, resampling...')
+                print('nan entries exist! resampling...')
                 u = model.module.base_dist.sample(
-                    (100, self.config.model.n_components)).squeeze()
+                (100, self.config.model.n_components)).squeeze()
                 samples, _ = model.module.inverse(u)
+            print('generating samples...')
             # sort by log_prob; take argsort idxs; flip high to low
             log_probs = model.module.log_prob(samples).sort(0)[1].flip(0)
             samples = samples[log_probs]
@@ -389,18 +390,18 @@ class Flow(object):
         # print('generating {} samples in batches of 1000...'.format(args.n_samples))
         n_sir = self.config.sampling.n_sir
         print('running SIR sampling...as a sanity check, we are only going to generate {} samples total.'.format(n_sir))
-        n_batches = int(self.config.sampling.n_sir // 1000)
+        n_batches = int(self.config.sampling.n_sir // 100)
         # for n in range(n_batches):
         
-         
+        # if self.args.alpha > 0:
         for n in range(n_batches):
         # for n in range(n_batches):  # HACK
             if (n % 5 == 0) and (n > 0):
                 print('on iter {}/{}'.format(n, n_sir))
-            u = model.module.base_dist.sample((1000, self.config.model.n_components)).squeeze().to(self.device)
+            u = model.module.base_dist.sample((100, self.config.model.n_components)).squeeze().to(self.device)
             
             # TODO: reweight the samples via dre_clf
-            logits, probas = self.dre_clf(u.view(1000, 1, 28, 28))
+            logits, probas = self.dre_clf(u.view(100, 1, 28, 28))
             ratios = (probas[:, 1]/probas[:, 0])
             if alpha > 0:
                 ratios = ratios**(alpha) 

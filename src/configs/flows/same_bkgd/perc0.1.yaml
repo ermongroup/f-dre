@@ -24,8 +24,8 @@ dre:
   alpha: 0
 
 sampling:
-  n_samples: 50000
-  n_sir: 50000
+  n_samples: 1000
+  n_sir: 100000
 
 model:
   name: "maf"
