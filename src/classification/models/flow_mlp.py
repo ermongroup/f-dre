@@ -2,7 +2,6 @@ import sys
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# sys.path.append('../')
 from src.flows.models.maf import MAF
 
 
@@ -13,11 +12,13 @@ class FlowClassifier(nn.Module):
   def __init__(self, config):
     super(FlowClassifier, self).__init__()
     self.config = config
-    # HACK: hardcoded flow architecture that we've been using!
-    self.flow = MAF(5, 2, 100, 1, None, 'relu', 'sequential', batch_norm=True)
     self.h_dim = config.model.h_dim
     self.n_classes = config.model.n_classes
     self.in_dim = config.model.in_dim
+
+    # HACK: hardcoded flow architecture that we've been using!
+    # TODO: fix flow architecture to vary with dataset size
+    self.flow = MAF(5, self.in_dim, 100, 1, None, 'relu', 'sequential', batch_norm=True)
 
     self.fc1 = nn.Linear(self.in_dim, self.h_dim)
     self.fc2 = nn.Linear(self.h_dim, self.h_dim)

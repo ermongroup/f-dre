@@ -1,3 +1,4 @@
+[TOY GMM EXPERIMENTS]
 # toy flow
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/gmm/perc0.1.yaml --exp_id=gmm_perc0.1 --ni
 
@@ -51,5 +52,29 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/ml
 # (PURELY DISCRIMINATIVE BASELINE)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/flow_mlp_perc1.0.yaml  --exp_id gmm_flow_mlp_perc1.0 --ni
 
+
 # (JOINT BASELINE)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/joint_flow_mlp_perc1.0.yaml  --exp_id joint_test --ni
+
+
+
+
+----------
+[MUTUAL INFORMATION EXPERIMENTS]
+1. (JOINT BASELINE)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_flow_perc1.0.yaml  --exp_id mi_flow_mlp_perc1.0 --ni --mi
+
+2. (PURELY DISCRIMINATIVE BASELINE)
+# TODO: need to incorporate InfoNCE HERE!!!!
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/disc_flow_perc1.0.yaml  --exp_id mi_disc_flow_mlp_perc1.0 --ni --mi
+
+3. (X-SPACE BASELINE)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/mi_perc1.0.yaml  --exp_id mi_perc1.0 --ni --mi
+
+4. (TRAIN FLOW): TODO NEED TO TRAIN MY FLOW HERE
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/mi/perc1.0.yaml --exp_id=mi_flow_perc1.0 --ni
+
+4a. (ENCODE)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/mi/perc1.0.yaml --exp_id encode_mi_perc1.0 --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/mi_flow_perc1.0/ --sample --encode_z --ni
+
+# need to change MI_flow -> MI in data encodings path

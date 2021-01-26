@@ -1,0 +1,54 @@
+training:
+  batch_size: 100
+  n_epochs: 100
+  ngpu: 1
+  log_interval: 500
+  iter_save: 100
+  exp_id: "mi_flow_perc1.0"
+  out_dir: "/atlas/u/kechoi/multi-fairgen/src/flows/results"
+  data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
+
+data:
+  dataset: "MI_flow"
+  subset: false
+  x_space: false
+  perc: 1.0
+  mus: [0, 3]
+  input_size: 2
+  num_workers: 4
+  flip_toy_var_order: true
+  rho: 0.95
+
+dre:
+  alpha: 0.06
+
+sampling:
+  n_samples: 50000
+  # sir: 1000
+
+model:
+  name: "maf"
+  dropout: 0.1
+  n_classes: 2
+  n_blocks: 5
+  n_components: 1
+  input_size: 2
+  hidden_size: 100
+  n_hidden: 1
+  activation_fn: 'relu'
+  input_order: 'sequential'
+  conditional: false
+  no_batch_norm: false
+  cond_label_size: 1
+  ema: false
+
+optim:
+  weight_decay: 0.000001
+  optimizer: "Adam"
+  lr: 0.0001
+  beta1: 0.9
+  amsgrad: false
+  eps: 0.00000001
+
+loss:
+  name: "cross_entropy"

@@ -93,7 +93,7 @@ class Flow(object):
         assert os.path.exists(ckpt_path)
         
         # load state dict
-        state_dict = torch.load(ckpt_path, map_location=self.device)['state_dict']
+        state_dict = torch.load(ckpt_path)['state_dict']
         clf.load_state_dict(state_dict)
         clf = clf.to(self.device)
         return clf
@@ -261,7 +261,7 @@ class Flow(object):
         wandb.log({"samples" : [wandb.Image(i) for i in samples[0:40]]})
 
     @torch.no_grad()
-    def generate_samples(self, model, n_row=10):
+    def generate_samples(self, model):
         all_samples = []
         preds = []
         model.eval()
@@ -289,27 +289,23 @@ class Flow(object):
             samples = torch.clamp(samples, 0., 1.)  # check if we want to multiply by 255 and transpose if we're gonna do metric stuff on here
 
             # get classifier predictions
-            if self.args.attr_clf_ckpt is not None:
-                logits, probas = self.attr_clf(samples.view(len(samples), self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
-                
-                # logits, probas = self.attr_clf(samples.view(len(samples), -1))
-                _, pred = torch.max(probas, 1)
+            logits, probas = self.attr_clf(samples.view(len(samples), -1))
+            _, pred = torch.max(probas, 1)
 
-                # save things
-                preds.append(pred.detach().cpu().numpy())
+            # save things
+            preds.append(pred.detach().cpu().numpy())
             all_samples.append(samples.detach().cpu().numpy())
         all_samples = np.vstack(all_samples)
         preds = np.hstack(preds)
-        print('prop of 1s:', np.sum(preds)/len(preds))
         fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
-        np.savez(os.path.join(self.args.out_dir, 'samples'), **{'x': all_samples})
-        np.savez(os.path.join(self.args.out_dir, 'metrics'), 
+        np.savez(os.path.join(self.args.out_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'samples'), **{'x': all_samples})
+        np.savez(os.path.join(self.args.out_dir, f'{self.config.data.dataset}_maf_perc{self.self.config.data.perc}', 'metrics'), 
             **{'preds': preds,
             'l2_fair_disc': fair_disc_l2,
             })
         # maybe just save some samples just for visualizations?
         filename = 'samples'+ '.png'
-        save_image(torch.from_numpy(all_samples[0:100]), os.path.join(self.args.out_dir, filename), nrow=n_row, normalize=True)
+        save_image(all_samples[0:100], os.path.join(self.args.out_dir, filename), nrow=n_row, normalize=True)
 
     @torch.no_grad()
     def encode_z(self, args, model):
@@ -370,7 +366,6 @@ class Flow(object):
         print('Done encoding all x')
 
     @torch.no_grad()
-
     def fair_generate(self, args, config, model, n_row=10):
         from torch.distributions import Categorical
 
@@ -383,65 +378,60 @@ class Flow(object):
             self.attr_clf.eval()
 
         # alpha = config.dre.alpha
-        alpha = self.args.alpha
+        alpha = 0
         print('flattening importance weights by alpha={}'.format(alpha))
 
         # print('generating {} samples in batches of 1000...'.format(args.n_samples))
-        n_sir = self.config.sampling.n_sir
+        n_sir = 50
         print('running SIR sampling...as a sanity check, we are only going to generate {} samples total.'.format(n_sir))
-        n_batches = int(self.config.sampling.n_sir // 1000)
+        n_batches = int(self.config.sampling.n_samples // 1000)
         # for n in range(n_batches):
         
-         
-        for n in range(n_batches):
-        # for n in range(n_batches):  # HACK
-            if (n % 5 == 0) and (n > 0):
-                print('on iter {}/{}'.format(n, n_sir))
-            u = model.module.base_dist.sample((1000, self.config.model.n_components)).squeeze().to(self.device)
-            
-            # TODO: reweight the samples via dre_clf
-            logits, probas = self.dre_clf(u.view(1000, 1, 28, 28))
-            ratios = (probas[:, 1]/probas[:, 0])
-            if alpha > 0:
-                ratios = ratios**(alpha) 
-            r_probs = ratios/ratios.sum()
-            sir_j = Categorical(r_probs).sample().item()
+        if alpha > 0:     
+            for n in range(n_sir):  # HACK
+                if (n % 5 == 0) and (n > 0):
+                    print('on iter {}/{}'.format(n, n_sir))
+                u = model.module.base_dist.sample((1000, self.config.model.n_components)).squeeze().to(self.device)
+                
+                # TODO: reweight the samples via dre_clf
+                logits, probas = self.dre_clf(u.view(1000, 1, 28, 28))
+                ratios = (probas[:, 1]/probas[:, 0])
+                ratios = ratios**(alpha)
+                r_probs = ratios/ratios.sum()
+                sir_j = Categorical(r_probs).sample().item()
 
-            samples, _ = model.module.inverse(u[sir_j].unsqueeze(0))
+                samples, _ = model.module.inverse(u[sir_j].unsqueeze(0))
+                log_probs = model.module.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
+                samples = samples[log_probs]
+                samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
+                samples = torch.sigmoid(samples)
+                samples = torch.clamp(samples, 0., 1.)
+
+                # get classifier predictions
+                logits, probas = self.attr_clf(samples.view(len(samples), -1))
+                _, pred = torch.max(probas, 1)
+
+                # save things
+                preds.append(pred.detach().cpu().numpy())
+                all_samples.append(samples.detach().cpu().numpy())
+            all_samples = np.vstack(all_samples)
+            preds = np.hstack(preds)
+        else:
+            # regular sampling
+            u = model.module.base_dist.sample((n_sir, self.config.model.n_components)).squeeze().to(self.device)
+            samples, _ = model.module.inverse(u)
             log_probs = model.module.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
             samples = samples[log_probs]
             samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
             samples = torch.sigmoid(samples)
             samples = torch.clamp(samples, 0., 1.)
-
             # get classifier predictions
-            # (len(z), )
-            logits, probas = self.attr_clf(samples.view(len(samples), self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
+            if self.args.attr_clf_ckpt is not None:
+                logits, probas = self.attr_clf(samples.view(len(samples), -1))
             _, pred = torch.max(probas, 1)
 
-            # save things
-            preds.append(pred.detach().cpu().numpy())
-            all_samples.append(samples.detach().cpu().numpy())
-        all_samples = np.vstack(all_samples)
-        preds = np.hstack(preds)
-        # else:
-        #     # regular sampling
-        #     u = model.module.base_dist.sample((n_sir, self.config.model.n_components)).squeeze().to(self.device)
-        #     samples, _ = model.module.inverse(u)
-        #     log_probs = model.module.log_prob(samples).sort(0)[1].flip(0)  # sort by log_prob; take argsort idxs; flip high to low
-        #     samples = samples[log_probs]
-        #     samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
-        #     samples = torch.sigmoid(samples)
-        #     samples = torch.clamp(samples, 0., 1.)
-        #     # get classifier predictions
-        #     if self.args.attr_clf_ckpt is not None:
-        #         # TODO
-        #         logits, probas = self.attr_clf(samples.view(len(samples), self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
-        #         # logits, probas = self.attr_clf(samples.view(len(samples), -1))
-        #     _, pred = torch.max(probas, 1)
-
-        #     all_samples = samples.detach().cpu().numpy()
-        #     preds = pred.detach().cpu().numpy()
+            all_samples = samples.detach().cpu().numpy()
+            preds = pred.detach().cpu().numpy()
         # check metrics
         fair_disc_l2, fair_disc_l1, fair_disc_kl = utils.fairness_discrepancy(preds, 2)
         print('prop of 1s:', np.sum(preds)/len(preds))
@@ -457,7 +447,36 @@ class Flow(object):
             filename = 'fair_samples_sir_alpha={}'.format(self.config.dre.alpha) + '.png'
         else:
             filename = 'fair_samples_baseline.png'
-        save_image(torch.from_numpy(all_samples[:100]), os.path.join(args.out_dir, filename), nrow=n_row, normalize=True)
+        save_image(torch.from_numpy(all_samples), os.path.join(args.out_dir, filename), nrow=n_row, normalize=True)
+
+    @torch.no_grad()
+    def fair_evaluate(self, args, config, model, n_row=10):
+        """
+        this function is intended for computing expectations with respect to an importance-weighted distribution (different from generating samples wrt q)
+        """
+        from utils import logsumexp_1p
+
+        all_samples = []
+        preds = []
+
+        model.eval()
+        self.dre_clf.eval()
+
+        # TODO: incorporate the statistic of interest
+        g_x = None
+
+        # sample z from your flow (TODO: fix number of samples)
+        u = model.module.base_dist.sample((100, self.config.model.n_components)).squeeze().to(self.device)
+        logits, probas = self.dre_clf(u.view(100, 1, 28, 28))
+        
+        # TODO: should make sure that logits are in the right form
+        log_ratios = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
+        ratios = torch.exp(log_ratios)
+        iw = 2./(1. + ratios)
+
+        # TODO: get statistic of interest
+        # E_pf(x) [(2/(1 + r(x))) * g(x)]
+        return (g_x * iw).mean()
 
 
 def dict2namespace(config):
