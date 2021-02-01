@@ -12,9 +12,11 @@ from torch.utils.data import DataLoader
 from torch.utils.checkpoint import checkpoint
 
 from torchvision.datasets import MNIST
-from datasets.celeba import CelebA
+import sys
+sys.path.append('../')
+from src.datasets.celeba import CelebA
 
-from models.glow.glow import Glow
+from src.models.glow.glow import Glow
 
 import numpy as np
 from tensorboardX import SummaryWriter

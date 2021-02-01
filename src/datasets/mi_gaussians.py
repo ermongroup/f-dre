@@ -20,6 +20,7 @@ class EncodedMIGaussians(Dataset):
 
         self.ref_dset = self.load_dataset(self.split, 'MI', 'ref')
         self.biased_dset = self.load_dataset(self.split, 'MI', 'biased')
+        self.joint = self.ref_dset
         print(self.split, len(self.ref_dset), len(self.biased_dset))
 
     def load_dataset(self, split, dataset, variant):
@@ -43,6 +44,24 @@ class EncodedMIGaussians(Dataset):
         dataset = TensorDataset(zs, d_ys)
         dataset = LoopingDataset(dataset)
         return dataset
+
+    def rho_to_mi(self):
+        """Obtain the ground truth mutual information from rho."""
+        # return -0.5 * np.log(1 - self.rho**2) * self.dim
+        # HACK!!!
+        return -0.5 * np.log(1 - self.rho**2) * (self.dim/2)
+
+    def mi_to_rho(self):
+        """Obtain the rho for Gaussian give ground truth mutual information."""
+        return np.sqrt(1 - np.exp(-2.0 / self.dim * self.mi))
+
+    def sample_from_joint(self, n):
+        # HACK: dim // 2
+        x, eps = torch.chunk(torch.randn(n, 2 * self.dim//2), 2, dim=1)
+        y = self.rho * x + torch.sqrt(torch.tensor(1. - self.rho**2).float()) * eps
+        # joint (ref)
+        q = torch.cat([x, y], dim=-1)
+        return q
 
     def __len__(self):
         # return len(self.biased_dset) + len(self.ref_dset)
@@ -84,6 +103,24 @@ class MIGaussians(Dataset):
             data = data[0:to_keep]
         self.data = torch.from_numpy(data).float()
 
+    def rho_to_mi(self):
+        """Obtain the ground truth mutual information from rho."""
+        # return -0.5 * np.log(1 - self.rho**2) * self.dim
+        # HACK!!!
+        return -0.5 * np.log(1 - self.rho**2) * (self.dim/2)
+
+    def mi_to_rho(self):
+        """Obtain the rho for Gaussian give ground truth mutual information."""
+        return np.sqrt(1 - np.exp(-2.0 / self.dim * self.mi))
+
+    def sample_from_joint(self, n):
+        # HACK: dim // 2
+        x, eps = torch.chunk(torch.randn(n, 2 * self.dim//2), 2, dim=1)
+        y = self.rho * x + torch.sqrt(torch.tensor(1. - self.rho**2).float()) * eps
+        # joint (ref)
+        q = torch.cat([x, y], dim=-1)
+        return q
+
     def __len__(self):
         return len(self.data)
 
@@ -95,14 +132,6 @@ class MIGaussians(Dataset):
             label = torch.ones(1)
 
         return item, label
-
-    def rho_to_mi(self):
-        """Obtain the ground truth mutual information from rho."""
-        return -0.5 * np.log(1 - self.rho**2) * self.dim
-
-    def mi_to_rho(self):
-        """Obtain the rho for Gaussian give ground truth mutual information."""
-        return np.sqrt(1 - np.exp(-2.0 / self.dim * self.mi))
 
 
 class GaussiansForMI(Dataset):
@@ -130,12 +159,13 @@ class GaussiansForMI(Dataset):
             record = self.generate_data()
         self.p = torch.from_numpy(record['p'])
         self.q = torch.from_numpy(record['q'])
+        self.joint = self.q
 
     def generate_data(self):
         # let's just do this to make our lives easier atm
         fpath = os.path.join(self.data_dir, 'gaussians_mi', '{}_d{}_rho{}.npz'.format(self.split, self.dim, self.rho))
         if self.split == 'train':
-            x, y = self.sample_data(40000)
+            x, y = self.sample_data(80000)
         elif self.split == 'val':
             x, y = self.sample_data(10000)
         else:
@@ -161,9 +191,19 @@ class GaussiansForMI(Dataset):
 
         return p, q
 
+    def sample_from_joint(self, n):
+        # HACK: dim // 2
+        x, eps = torch.chunk(torch.randn(n, 2 * self.dim//2), 2, dim=1)
+        y = self.rho * x + torch.sqrt(torch.tensor(1. - self.rho**2).float()) * eps
+        # joint (ref)
+        q = torch.cat([x, y], dim=-1)
+        return q
+
     def rho_to_mi(self):
         """Obtain the ground truth mutual information from rho."""
-        return -0.5 * np.log(1 - self.rho**2) * self.dim
+        # return -0.5 * np.log(1 - self.rho**2) * self.dim
+        # HACK!!!
+        return -0.5 * np.log(1 - self.rho**2) * (self.dim/2)
 
     def mi_to_rho(self):
         """Obtain the rho for Gaussian give ground truth mutual information."""

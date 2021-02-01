@@ -15,6 +15,9 @@ from classification.models.mlp import (
 )
 from classification.models.flow_mlp import FlowClassifier
 from classification.models.resnet import ResnetClassifier
+from classification.models.networks import *
+# HACK: this is going to be really annoying to bake Glow into this
+from classification.models.glow import Glow
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
 from losses import joint_gen_disc_loss
@@ -54,6 +57,11 @@ class Classifier(BaseTrainer):
         self.checkpoint_dir = os.path.join(self.output_dir, 'checkpoints')
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
+        # z-encoding
+        self.flow = self.load_glow()
+        if self.args.encode_z:
+            print('using flow to encode x into z-space...')
+
     def get_model(self):
         model = self.get_model_cls(self.config.model.name)
         model = model.to(self.config.device)
@@ -62,18 +70,39 @@ class Classifier(BaseTrainer):
 
     def get_model_cls(self, name):
         if name == 'mlp':
-            # model_cls = MLPClassifier
             model_cls = MLPClassifierv2
         elif name == 'resnet':
             model_cls = ResnetClassifier
+        elif name == 'resnet20':
+            model_cls = resnet20()
+            return model_cls
         elif name == 'flow_mlp':
-            print('Training flow + mlp discriminatively...')
+            print('Training flow + mlp...')
             model_cls = FlowClassifier
         else:
             print('Model {} not found!'.format(name))
             raise NotImplementedError
 
         return model_cls(self.config)
+
+    def load_glow(self):
+        import json
+        output_folder = '/atlas/u/kechoi/Glow-PyTorch/glow/'
+        # model_name = 'glow_model_250.pth'
+        model_name = 'glow_affine_coupling.pt'
+
+        with open(output_folder + 'hparams.json') as json_file:  
+            hparams = json.load(json_file)
+        image_shape = (32, 32, 3)  # HACK for CIFAR10
+        num_classes = 10
+
+        model = Glow(image_shape, hparams['hidden_channels'], hparams['K'], hparams['L'], hparams['actnorm_scale'], hparams['flow_permutation'], hparams['flow_coupling'], hparams['LU_decomposed'], num_classes, hparams['learn_top'], hparams['y_condition'])
+
+        # load checkpoint
+        model.load_state_dict(torch.load(output_folder + model_name))
+        model.set_actnorm_init()
+        model = model.to(self.config.device)
+        return model
 
     def get_loss(self):
         if self.config.loss.name == 'bce':
@@ -132,6 +161,7 @@ class Classifier(BaseTrainer):
 
         # train classifier
         self.model.train()
+        self.flow.eval()
         data_tqdm = tqdm(iter(self.train_dataloader), leave=False, total=len(self.train_dataloader))
 
         num_pos_correct = 0
@@ -140,17 +170,24 @@ class Classifier(BaseTrainer):
         num_neg_samples = 0
 
         for i, (z_ref, z_biased) in enumerate(data_tqdm):
-            z = torch.cat([z_ref, z_biased])
+            z = torch.cat([z_ref, z_biased]).to(self.device)
             y = torch.cat([torch.ones(z_ref.shape[0]), torch.zeros(z_biased.shape[0])])
 
-            # random permutation of data
-            if 'mlp' in self.config.model.name:
-                z = z.to(self.device).view(len(z), -1)
-            else:
-                z = z.to(self.device).view(len(z), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
             idx = torch.randperm(len(z))
             z = z[idx].to(self.device).float()
             y = y[idx].to(self.device).long()
+
+            if self.args.encode_z:
+                # TODO: preprocessing before glow
+                z = utils.glow_preprocess(z)
+                with torch.no_grad():
+                    z, _, _ = self.flow(z)
+
+            # random permutation of data
+            if 'mlp' in self.config.model.name:
+                z = z.view(len(z), -1)
+            else:
+                z = z.view(len(z), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
             
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = self.model(z)
@@ -225,17 +262,22 @@ class Classifier(BaseTrainer):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
             val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test(self.val_dataloader, 'val')
+            
+            # evaluate on test (i just added this in)
+            test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
             scheduler.step()
             
             # check performance on validation set
             if val_loss < best_loss:
+            # if val_acc > best_acc:
                 print('saving best model..')
                 best_acc = val_acc
                 best_loss = val_loss
                 best_epoch = epoch
                 best = True
                 self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
-                self.flow_diagnostics(step=epoch, n_row=10)
+                # if 'flow' in self.config.model.name:
+                #     self.flow_diagnostics(step=epoch, n_row=10)
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)
@@ -276,20 +318,27 @@ class Classifier(BaseTrainer):
 
         with torch.no_grad():
             self.model.eval()
+            self.flow.eval()
 
             # test classifier
             t = tqdm(iter(loader), leave=False, total=len(loader))
             for i, (z_ref, z_biased) in enumerate(t):
-                z = torch.cat([z_ref, z_biased])
+                z = torch.cat([z_ref, z_biased]).to(self.device)
                 y = torch.cat([
                     torch.ones(z_ref.shape[0]),
                     torch.zeros(z_biased.shape[0])
                 ])
+
+                # TODO: ENCODE WITH FLOW!!!! (REFER TO TRAIN)
+                if self.args.encode_z:
+                    # TODO: preprocessing before glow
+                    z = utils.glow_preprocess(z)
+                    z, _, _ = self.flow(z)
                 
                 if 'mlp' in self.config.model.name:
-                    z = z.to(self.device).view(len(z), -1)
+                    z = z.view(len(z), -1)
                 else:
-                    z = z.to(self.device).view(len(z), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
+                    z = z.view(len(z), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
                 y = y.to(self.device).long()
 
                 logits, probs = self.model(z)

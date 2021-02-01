@@ -22,6 +22,16 @@ from .mi_gaussians import (
     MIGaussians,
     EncodedMIGaussians
 )
+from .cifar10 import (
+    ZCIFAR10, 
+    SplitCIFAR10,
+    AttrCIFAR10,
+    DASplitCIFAR10,
+    DADRESplitCIFAR10
+)
+from .omniglot import (
+    Omniglot
+)
 
 # --------------------
 # Helper functions
@@ -298,11 +308,120 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         test_ref = MIGaussians(config, 'ref', split='test')
 
         if args.encode_z:
-            raise NotImplementedError
+            # keep each dataset separate for encoding
+            for dataset in (train_biased, train_ref):
+                dataset.input_dims = input_dims
+                dataset.input_size = int(np.prod(input_dims))
+                dataset.label_size = label_size
+            
+            kwargs = {'num_workers': 1, 'pin_memory': True} if device.type is 'cuda' else {}
+
+            train_loader_biased = DataLoader(train_biased, batch_size, shuffle=True, **kwargs)
+            val_loader_biased = DataLoader(val_biased, batch_size, shuffle=False, **kwargs)
+            test_loader_biased = DataLoader(test_biased, batch_size, shuffle=False, **kwargs)
+            train_loader_ref = DataLoader(train_ref, batch_size, shuffle=True, **kwargs)
+            val_loader_ref = DataLoader(val_ref, batch_size, shuffle=False, **kwargs)
+            test_loader_ref = DataLoader(test_ref, batch_size, shuffle=False, **kwargs)
+
+            return [train_loader_biased, train_loader_ref], [val_loader_biased, val_loader_ref], [test_loader_biased, test_loader_ref]
 
         train_dataset = ConcatDataset([train_biased, train_ref])
         val_dataset = ConcatDataset([val_biased, val_ref])
         test_dataset = ConcatDataset([test_biased, test_ref])
+
+    elif dataset_name == 'Omniglot':
+        input_dims = config.data.input_size
+        label_size = 1622
+        lam = 1e-6
+
+        train_transform = test_transform = T.Compose([
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+
+        train_dataset = Omniglot(config.training.data_dir, config, split='train', transform=train_transform)
+        val_dataset = Omniglot(config.training.data_dir, config, split='val', transform=train_transform)
+        test_dataset = Omniglot(config.training.data_dir, config, split='test', transform=test_transform)
+
+    elif dataset_name in ['ZCIFAR10']:
+        input_dims = config.data.input_size
+        label_size = 10
+        lam = 1e-6
+
+        if config.data.x_space:  # x-space
+            print('using x-space for density ratio estimation...')
+            train_transform = test_transform = T.Compose([
+                T.Resize(config.data.image_size),
+                T.ToTensor()
+            ])
+            train_dataset = SplitCIFAR10(config.training.data_dir, config, split='train', transform=train_transform)
+            val_dataset = SplitCIFAR10(config.training.data_dir, config, split='val', transform=train_transform)
+            test_dataset = SplitCIFAR10(config.training.data_dir, config, split='test', transform=test_transform)
+        else:
+            # z-space
+            print('using encodings in z-space...')
+            train_dataset = ZCIFAR10(None, config, split='train')
+            val_dataset = ZCIFAR10(None, config, split='val')
+            test_dataset = ZCIFAR10(None, config, split='test')
+
+    elif dataset_name in ['DA_CIFAR10']:
+        input_dims = config.data.input_size
+        label_size = 1
+        lam = 1e-6
+
+        print('using x-space for baseline classification...')
+        train_transform = T.Compose([
+            T.RandomAffine(0, translate=(0.1, 0.1)),
+            T.RandomHorizontalFlip(),
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        test_transform = T.Compose([
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        train_dataset = DASplitCIFAR10(config.training.data_dir, config, split='train', transform=train_transform)
+        val_dataset = DASplitCIFAR10(config.training.data_dir, config, split='val', transform=train_transform)
+        test_dataset = DASplitCIFAR10(config.training.data_dir, config, split='test', transform=test_transform)
+
+    elif dataset_name == 'DADRE_CIFAR10':
+        input_dims = config.data.input_size
+        label_size = 1
+        lam = 1e-6
+
+        print('using x-space for density ratio estimation...')
+        train_transform = T.Compose([
+            T.RandomAffine(0, translate=(0.1, 0.1)),
+            T.RandomHorizontalFlip(),
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        test_transform = T.Compose([
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        train_dataset = DADRESplitCIFAR10(config.training.data_dir, config, split='train', transform=train_transform)
+        val_dataset = DADRESplitCIFAR10(config.training.data_dir, config, split='val', transform=train_transform)
+        test_dataset = DADRESplitCIFAR10(config.training.data_dir, config, split='test', transform=test_transform)
+
+    elif dataset_name == 'attrCIFAR10':
+        input_dims = config.data.input_size
+        label_size = 10
+        lam = 1e-6
+
+        train_transform = test_transform = T.Compose([
+            T.RandomAffine(0, translate=(0.1, 0.1)),
+            T.RandomHorizontalFlip(),
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        test_transform = T.Compose([
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        train_dataset = AttrCIFAR10(config.training.data_dir, config, split='train', transform=train_transform)
+        val_dataset = AttrCIFAR10(config.training.data_dir, config, split='val', transform=train_transform)
+        test_dataset = AttrCIFAR10(config.training.data_dir, config, split='test', transform=test_transform)
 
     # imaging dataset pulled from torchvision
     elif dataset_name in ['CIFAR10']:

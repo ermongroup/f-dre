@@ -17,7 +17,7 @@ class ResnetClassifier(nn.Module):
         self.ngf = ngf = 64
         self.act = act = nn.SiLU()
         self.num_scales = self.ngf  # TODO
-        self.channels = 1
+        self.channels = 3
 
         self.begin_conv = nn.Conv2d(self.channels, ngf, 3, stride=1, padding=1)
 
@@ -45,8 +45,12 @@ class ResnetClassifier(nn.Module):
                           normalization=self.norm, dilation=2)]
         )
 
+        # self.res4 = nn.ModuleList([
+        #     ResidualBlock(2 * self.ngf, 2 * self.ngf, resample='down', act=act, normalization=self.norm, adjust_padding=True, dilation=4),
+        #     ResidualBlock(2 * self.ngf, 2 * self.ngf, resample=None, act=act, normalization=self.norm, dilation=4)]
+        # )
         self.res4 = nn.ModuleList([
-            ResidualBlock(2 * self.ngf, 2 * self.ngf, resample='down', act=act, normalization=self.norm, adjust_padding=True, dilation=4),
+            ResidualBlock(2 * self.ngf, 2 * self.ngf, resample='down', act=act, normalization=self.norm, adjust_padding=False, dilation=4),
             ResidualBlock(2 * self.ngf, 2 * self.ngf, resample=None, act=act, normalization=self.norm, dilation=4)]
         )
 
@@ -55,7 +59,8 @@ class ResnetClassifier(nn.Module):
         self.refine3 = RefineBlock([2 * self.ngf, 2 * self.ngf], self.ngf, act=act)
         self.refine4 = RefineBlock([self.ngf, self.ngf], self.ngf, act=act, end=True)
 
-        self.fc = nn.Linear(784, 2)
+        # self.fc = nn.Linear(784, 2)
+        self.fc = nn.Linear(3072, 1)
 
     def _compute_cond_module(self, module, x):
         for m in module:
@@ -83,6 +88,7 @@ class ResnetClassifier(nn.Module):
         # classification
         output = output.view(len(x), -1)
         logits = self.fc(output)
-        probas = F.softmax(logits, dim=1)
+        # probas = F.softmax(logits, dim=1)
+        probas = torch.sigmoid(logits)
 
         return logits, probas

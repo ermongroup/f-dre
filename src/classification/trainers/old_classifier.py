@@ -15,9 +15,11 @@ from classification.models.mlp import (
 )
 from classification.models.flow_mlp import FlowClassifier
 from classification.models.resnet import ResnetClassifier
+from classification.models.networks import *
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
-from losses import joint_gen_disc_loss
+# from losses import joint_gen_disc_loss
+from losses import *
 
 import torch
 import torch.optim as optim
@@ -34,7 +36,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-class MIClassifier(BaseTrainer):
+class OldClassifier(BaseTrainer):
     def __init__(self, args, config):
         self.args = args
         self.config = config
@@ -66,11 +68,11 @@ class MIClassifier(BaseTrainer):
             model_cls = MLPClassifierv2
         elif name == 'resnet':
             model_cls = ResnetClassifier
+        elif name == 'resnet20':
+            model_cls = resnet20()
+            return model_cls
         elif name == 'flow_mlp':
-            if self.config.loss.name != 'joint':
-                print('Training flow + mlp discriminatively...')
-            else:
-                print('Training flow + mlp jointly...')
+            print('Training flow + mlp...')
             model_cls = FlowClassifier
         else:
             print('Model {} not found!'.format(name))
@@ -98,6 +100,16 @@ class MIClassifier(BaseTrainer):
         else:
             raise NotImplementedError()
 
+    def get_datasets(self):
+        train, val, test = dsets.get_dataset(self.args, self.config)
+
+        # create dataloaders
+        train = data_utils.DataLoader(train, batch_size=self.config.training.batch_size//2, shuffle=True)
+        val = data_utils.DataLoader(val, batch_size=self.config.training.batch_size//2, shuffle=False)
+        test = data_utils.DataLoader(test, batch_size=self.config.training.batch_size//2, shuffle=False)
+
+        return train, val, test
+
     def accuracy(self, logits, y):
         with torch.no_grad():
             if self.config.loss.name in ['bce', 'joint']:
@@ -118,20 +130,6 @@ class MIClassifier(BaseTrainer):
                 probs = F.softmax(logits, dim=1)
                 _, y_preds = torch.max(probs, 1)
         return y_preds
-
-    def estimate_mi(self, n=10000):
-        self.model.eval()
-        with torch.no_grad():
-            # test samples from joint
-            try:
-                samples = self.test_dataloader.dataset.joint.to(self.device)
-            except:
-                # this is for the separate flow encoding + clf dataset
-                samples = self.test_dataloader.dataset.joint.dataset
-                samples = torch.stack([x[0] for x in samples]).to(self.device)
-        logits, probas = self.model(samples)
-        mi = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
-        return mi.mean().item()
 
     def train_epoch(self, epoch):
         # get meters ready
@@ -158,6 +156,8 @@ class MIClassifier(BaseTrainer):
             idx = torch.randperm(len(z))
             z = z[idx].to(self.device).float()
             y = y[idx].to(self.device).long()
+
+            z.requires_grad_(True)
             
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = self.model(z)
@@ -177,7 +177,13 @@ class MIClassifier(BaseTrainer):
 
             # gradient update
             self.optimizer.zero_grad()
+            loss.backward(retain_graph=True)
+            gp = grad_penalty(self.model, self.config.loss.alpha, self.device)
+            # like this?
+            # gp.backward()
+            loss = loss + gp
             loss.backward()
+
             self.optimizer.step()
 
             # get summary
@@ -218,10 +224,6 @@ class MIClassifier(BaseTrainer):
         test_loss_db = np.zeros(self.config.training.n_epochs)
         tr_acc_db = np.zeros(self.config.training.n_epochs)
         test_acc_db = np.zeros(self.config.training.n_epochs)
-        est_mi_db = np.zeros(self.config.training.n_epochs)
-
-        # true mi
-        true_mi = self.test_dataloader.dataset.mi
 
         # adjust learning rate as you go
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -236,19 +238,19 @@ class MIClassifier(BaseTrainer):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
             val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test(self.val_dataloader, 'val')
-            est_mi = self.estimate_mi()
-            print('Estimated MI: {} (true MI: {})'.format(est_mi, true_mi))
             scheduler.step()
             
             # check performance on validation set
             if val_loss < best_loss:
+            # if val_acc > best_acc:
                 print('saving best model..')
                 best_acc = val_acc
                 best_loss = val_loss
                 best_epoch = epoch
                 best = True
                 self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
-                # self.flow_diagnostics(step=epoch, n_row=10)
+                # if 'flow' in self.config.model.name:
+                #     self.flow_diagnostics(step=epoch, n_row=10)
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)
@@ -258,21 +260,18 @@ class MIClassifier(BaseTrainer):
             test_loss_db[epoch-1] = val_loss
             tr_acc_db[epoch - 1] = tr_acc
             test_acc_db[epoch - 1] = val_acc
-            est_mi_db[epoch-1] = est_mi
         # evaluate on test
         test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
         
         # TODO: save metrics
         self.plot_train_test_curves(tr_loss_db, test_loss_db)
         self.plot_train_test_curves(tr_acc_db, test_acc_db, metric='Accuracy', title='train_curve_acc')
-        self.plot_mi(est_mi_db, self.test_dataloader.dataset.mi)
         print('Completed training! Best performance at epoch {}, loss: {}, acc: {}'.format(best_epoch, best_loss, best_acc))
         # TODO: also save test metrics
         np.save(os.path.join(self.output_dir, 'tr_loss.npy'), tr_loss_db)
         np.save(os.path.join(self.output_dir, 'val_loss.npy'), test_loss_db)
         np.save(os.path.join(self.output_dir, 'tr_acc.npy'), tr_acc_db)
         np.save(os.path.join(self.output_dir, 'val_acc.npy'), test_acc_db)
-        np.save(os.path.join(self.output_dir, 'est_mi.npy'), est_mi_db)
 
     def test(self, loader, test_type):
         # get meters ready
@@ -335,8 +334,7 @@ class MIClassifier(BaseTrainer):
             test_type,
             np.round(loss_meter.avg, 3), 
             test_type,
-            np.round(avg_acc, 3)
-        ))
+            np.round(avg_acc, 3)))
         summary.update(
             dict(avg_loss=np.round(loss_meter.avg, 3),
                 avg_acc=np.round(avg_acc, 3)))
@@ -404,24 +402,20 @@ class MIClassifier(BaseTrainer):
         plt.savefig(
             os.path.join(self.output_dir, '{}.png'.format(title)), dpi=200)
 
-    def plot_mi(self, est_mi, true_mi, title='est_mi'):
-        sns.set_context('paper', font_scale=2)
-        sns.set_style('whitegrid')
+    def get_density_ratios(self, x, log=False):
+        from torch.distributions import Normal
+        p_mu = self.config.data.mus[0]
+        q_mu = self.config.data.mus[1]
 
-        n = len(est_mi)
-        plt.figure(figsize=(8,5))
-        plt.plot(range(len(est_mi)), est_mi, '-o', label='est. MI')
-        plt.hlines(true_mi, 0, len(est_mi), label='true MI', color='black')
+        log_p = Normal(p_mu, 1).log_prob(x).sum(-1)
+        log_q = Normal(q_mu, 1).log_prob(x).sum(-1)
+        log_r = log_q - log_p  # ref/bias
+        if log:
+            r = log_r
+        else:
+            r = torch.exp(log_r)
 
-        plt.title('Estimated MI', fontsize=22)
-        plt.xlabel('Epoch', fontsize=20)
-        plt.ylabel('MI', fontsize=20)
-        plt.legend(loc='upper right', fontsize=15)
-
-        sns.despine()
-        plt.tight_layout()
-        plt.savefig(
-            os.path.join(self.output_dir, '{}.png'.format(title)), dpi=200)
+        return r
 
     def flow_diagnostics(self, step, n_row=10):
         self.model.eval()

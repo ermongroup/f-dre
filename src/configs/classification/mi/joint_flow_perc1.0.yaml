@@ -1,6 +1,6 @@
 training:
   batch_size: 128
-  n_epochs: 20
+  n_epochs: 200
   ngpu: 1
   iter_log: 1000
   iter_save: 100

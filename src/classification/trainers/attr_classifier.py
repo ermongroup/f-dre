@@ -11,13 +11,9 @@ import numpy as np
 from datasets.data import fetch_dataloaders
 
 import classification.utils as utils
-# import classification.dsets as dsets
-# from classification.dsets.flipped_mnist import (
-#     SplitEncodedMNIST,
-#     SplitMNIST
-# )
 from classification.models.mlp import MLPClassifier
 from classification.models.resnet import ResnetClassifier
+from classification.models.networks import *
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
 
@@ -66,6 +62,10 @@ class AttrClassifier(BaseTrainer):
             model_cls = MLPClassifier
         elif name == 'resnet':
             model_cls = ResnetClassifier
+            # model_cls = Resnet_v2
+        elif name == 'resnet20':
+            model_cls = resnet20()
+            return model_cls
         else:
             print('Model {} not found!'.format(name))
             raise NotImplementedError
@@ -73,7 +73,7 @@ class AttrClassifier(BaseTrainer):
         return model_cls(self.config)
 
     def get_loss(self):
-        if self.config.loss == 'bce':
+        if self.config.loss.name == 'bce':
             loss = F.binary_cross_entropy_with_logits
         else:
             loss = F.cross_entropy
@@ -89,16 +89,6 @@ class AttrClassifier(BaseTrainer):
             return optim.SGD(parameters, lr=self.config.optim.lr, momentum=0.9, weight_decay=self.config.optim.weight_decay)
         else:
             raise NotImplementedError()
-
-    # def get_datasets(self):
-    #     train, val, test = dsets.get_dataset(self.args, self.config)
-
-    #     # create dataloaders
-    #     train = data_utils.DataLoader(train, batch_size=self.config.training.batch_size//2, shuffle=True)
-    #     val = data_utils.DataLoader(val, batch_size=self.config.training.batch_size//2, shuffle=False)
-    #     test = data_utils.DataLoader(test, batch_size=self.config.training.batch_size//2, shuffle=False)
-
-    #     return train, val, test
 
     def accuracy(self, logits, y):
         with torch.no_grad():
@@ -122,9 +112,6 @@ class AttrClassifier(BaseTrainer):
         data_tqdm = tqdm(iter(self.train_dataloader), leave=False, total=len(self.train_dataloader))
 
         for i, (z, y) in enumerate(data_tqdm):
-            # z = torch.cat([z_ref, z_biased])
-            # y = torch.cat([torch.ones(z_ref.shape[0]), torch.zeros(z_biased.shape[0])])
-
             # random permutation of data
             if self.config.model.name =='mlp':
                 z = z.to(self.device).view(len(z), -1)
@@ -136,11 +123,11 @@ class AttrClassifier(BaseTrainer):
             
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = self.model(z)
-            loss = self.loss(logits, y)
+            loss = self.loss(logits.squeeze(), y.float())
             loss_meter.update(loss.item())
 
             # check accuracy
-            accs = self.accuracy(logits.squeeze(), y)
+            accs = self.accuracy(logits.squeeze(), y.squeeze())
             acc_meter.update(accs)
 
             # gradient update
@@ -201,7 +188,8 @@ class AttrClassifier(BaseTrainer):
             scheduler.step()
             
             # check performance on validation set
-            if val_acc >= best_acc:
+            # if val_acc >= best_acc:
+            if val_loss < best_loss:
                 best_loss = val_loss
                 best_acc = val_acc
                 best_epoch = epoch
@@ -246,12 +234,6 @@ class AttrClassifier(BaseTrainer):
             # test classifier
             t = tqdm(iter(loader), leave=False, total=len(loader))
             for i, (z, y) in enumerate(t):
-                # z = torch.cat([z_ref, z_biased])
-                # y = torch.cat([
-                #     torch.ones(z_ref.shape[0]),
-                #     torch.zeros(z_biased.shape[0])
-                # ])
-                
                 if self.config.model.name =='mlp':
                     z = z.to(self.device).view(len(z), -1)
                 else:
@@ -260,13 +242,13 @@ class AttrClassifier(BaseTrainer):
                 y = y.to(self.device).long()
 
                 logits, probs = self.model(z)
-                loss = self.loss(logits, y, reduction='sum')
-                _, pred = torch.max(probs, 1)
+                loss = self.loss(logits.squeeze(), y.float())
+                # _, pred = torch.max(probs, 1)
                 num_examples += y.size(0)
                 loss_meter.update(loss.item())
                 
                 # TODO: check accuracy between classes
-                accs = self.accuracy(logits.squeeze(), y)
+                accs = self.accuracy(logits.squeeze(), y.squeeze())
                 acc_meter.update(accs)
 
                 # save items
@@ -286,9 +268,13 @@ class AttrClassifier(BaseTrainer):
         # pprint(summary)
 
         # correctly format items to return
-        labels = torch.cat(labels).data.cpu().numpy()
-        p_y1 = torch.cat(p_y1)
-        ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
+        labels = torch.cat(labels).squeeze()
+        labels = labels.data.cpu().numpy()
+        p_y1 = torch.cat(p_y1).squeeze()
+        # from utils import logsumexp_1p
+        ratios = p_y1/(1-p_y1)
+        ratios = ratios.data.cpu().numpy()
+        # ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
         p_y1 = p_y1.data.cpu().numpy()
 
         return loss_meter.avg, acc_meter.avg, labels, p_y1, ratios
@@ -298,7 +284,8 @@ class AttrClassifier(BaseTrainer):
             function to check (1) classifier calibration; and (2) save weights
             """
             # assess calibration
-            fraction_of_positives, mean_predicted_value = calibration_curve(y_valid, valid_prob_pos[:, 1])
+            # fraction_of_positives, mean_predicted_value = calibration_curve(y_valid, valid_prob_pos[:, 1])
+            fraction_of_positives, mean_predicted_value = calibration_curve(y_valid, valid_prob_pos)
 
             # save calibration results
             np.save(os.path.join(self.output_dir, f'{split}_fraction_of_positives'), fraction_of_positives)

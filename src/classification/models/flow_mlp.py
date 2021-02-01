@@ -18,7 +18,10 @@ class FlowClassifier(nn.Module):
 
     # HACK: hardcoded flow architecture that we've been using!
     # TODO: fix flow architecture to vary with dataset size
-    self.flow = MAF(5, self.in_dim, 100, 1, None, 'relu', 'sequential', batch_norm=True)
+    if 'CIFAR' in self.config.data.dataset:
+      self.flow = MAF(5, self.in_dim, 1024, 2, None, 'relu', 'sequential', batch_norm=True)
+    else:
+      self.flow = MAF(5, self.in_dim, 100, 1, None, 'relu', 'sequential', batch_norm=True)
 
     self.fc1 = nn.Linear(self.in_dim, self.h_dim)
     self.fc2 = nn.Linear(self.h_dim, self.h_dim)

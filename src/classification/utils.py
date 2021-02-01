@@ -3,6 +3,20 @@ import torch
 import numpy as np
 
 
+def glow_preprocess(x):
+    # Follows:
+    # https://github.com/tensorflow/tensor2tensor/blob/e48cf23c505565fd63378286d9722a1632f4bef7/tensor2tensor/models/research/glow.py#L78
+    n_bits = 8
+    x = x * 255  # undo ToTensor scaling to [0,1]
+
+    n_bins = 2 ** n_bits
+    if n_bits < 8:
+        x = torch.floor(x / 2 ** (8 - n_bits))
+    x = x / n_bins - 0.5
+
+    return x
+
+
 def logsumexp_1p(s):
     # numerically stable implementation of log sigmoid via logsumexp
     # NOTE: this assumes that you feed in -s for the positive probabilities
