@@ -17,6 +17,11 @@ from .toy import (
     GaussianMixtures, 
     EncodedGaussianMixtures
 )
+from .mi_gaussians import (
+    GaussiansForMI,
+    MIGaussians,
+    EncodedMIGaussians
+)
 
 # --------------------
 # Helper functions
@@ -67,7 +72,19 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         train_dataset = ourMNIST(args, config, split='train')
         val_dataset = ourMNIST(args, config, split='val')
         test_dataset = ourMNIST(args, config, split='test')
-        
+
+    elif dataset_name in ['FlippedMNIST']:
+        '''
+        MNIST with flipped background
+        '''
+        input_dims = 784
+        label_size = 10
+        lam = 1e-6
+
+        train_dataset = ourMNIST(args, config, split='train', flipped=True)
+        val_dataset = ourMNIST(args, config, split='val', flipped=True)
+        test_dataset = ourMNIST(args, config, split='test', flipped=True)
+
     elif dataset_name in ['BackgroundMNIST']:
         '''
         MNIST with black and white backgrounds
@@ -108,12 +125,23 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
             train_dataset = ConcatDataset([train_mnist, train_flipped])
             val_dataset = ConcatDataset([val_mnist, val_flipped])
             test_dataset = ConcatDataset([test_mnist, test_flipped])
-        
-    
+
+    elif dataset_name in ['MNISTSubset']:
+        '''
+        MNIST with subset of digits
+        '''
+        input_dims = 784
+        label_size = 10
+        lam = 1e-6
+
+        train_dataset = MNISTSubset(args, config, split='train')
+        val_dataset = MNISTSubset(args, config, split='val')
+        test_dataset = MNISTSubset(args, config, split='test')
+
 
     elif dataset_name in ['BackgroundMNISTSubset']:
         '''
-        Subset of MNIST digits with black and white backgrounds; same digits
+        Subset of MNIST digits with black and white backgrounds; diff digits
         '''
         input_dims = 784
         label_size = 10
@@ -204,6 +232,7 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         train_dataset = ConcatDataset([train_biased, train_ref])
         val_dataset = ConcatDataset([val_biased, val_ref])
         test_dataset = ConcatDataset([test_biased, test_ref])
+
     elif dataset_name in ['SplitEncodedMNIST']:
         input_dims = 784
         label_size = 1
@@ -264,6 +293,42 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
                 args, config, split='train')
             val_dataset = EncodedGaussianMixtures(args, config, split='val')
             test_dataset = EncodedGaussianMixtures(args, config, split='test')
+
+    elif dataset_name in ['MI']:
+        input_dims = config.data.input_size
+        label_size = 1
+        lam = 1e-6
+
+        if config.data.x_space:  # x-space
+            train_dataset = GaussiansForMI(config, split='train')
+            val_dataset = GaussiansForMI(config, split='val')
+            test_dataset = GaussiansForMI(config, split='test')
+        else:
+            # z-space
+            print('using encodings in z-space...')
+            train_dataset = EncodedMIGaussians(config, split='train')
+            val_dataset = EncodedMIGaussians(config, split='val')
+            test_dataset = EncodedMIGaussians(config, split='test')
+
+    elif dataset_name == 'MI_flow':
+        input_dims = config.data.input_size
+        label_size = 1
+        lam = 1e-6
+
+        train_biased = MIGaussians(config, 'bias', split='train')
+        val_biased = MIGaussians(config, 'bias', split='val')
+        test_biased = MIGaussians(config, 'bias', split='test')
+
+        train_ref = MIGaussians(config, 'ref', split='train')
+        val_ref = MIGaussians(config, 'ref', split='val')
+        test_ref = MIGaussians(config, 'ref', split='test')
+
+        if args.encode_z:
+            raise NotImplementedError
+
+        train_dataset = ConcatDataset([train_biased, train_ref])
+        val_dataset = ConcatDataset([val_biased, val_ref])
+        test_dataset = ConcatDataset([test_biased, test_ref])
 
     # imaging dataset pulled from torchvision
     elif dataset_name in ['CIFAR10']:

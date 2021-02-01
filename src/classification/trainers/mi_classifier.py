@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-class Classifier(BaseTrainer):
+class MIClassifier(BaseTrainer):
     def __init__(self, args, config):
         self.args = args
         self.config = config
@@ -95,16 +95,6 @@ class Classifier(BaseTrainer):
         else:
             raise NotImplementedError()
 
-    def get_datasets(self):
-        train, val, test = dsets.get_dataset(self.args, self.config)
-
-        # create dataloaders
-        train = data_utils.DataLoader(train, batch_size=self.config.training.batch_size//2, shuffle=True)
-        val = data_utils.DataLoader(val, batch_size=self.config.training.batch_size//2, shuffle=False)
-        test = data_utils.DataLoader(test, batch_size=self.config.training.batch_size//2, shuffle=False)
-
-        return train, val, test
-
     def accuracy(self, logits, y):
         with torch.no_grad():
             if self.config.loss.name in ['bce', 'joint']:
@@ -125,6 +115,12 @@ class Classifier(BaseTrainer):
                 probs = F.softmax(logits, dim=1)
                 _, y_preds = torch.max(probs, 1)
         return y_preds
+
+    def estimate_mi(self, logits):
+        mi = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
+        # log_ratios = torch.log(probas/(1-probas))
+        # mi = log_ratios.mean()
+        return mi.mean()
 
     def train_epoch(self, epoch):
         # get meters ready
@@ -211,6 +207,7 @@ class Classifier(BaseTrainer):
         test_loss_db = np.zeros(self.config.training.n_epochs)
         tr_acc_db = np.zeros(self.config.training.n_epochs)
         test_acc_db = np.zeros(self.config.training.n_epochs)
+        est_mi_db = np.zeros(self.config.training.n_epochs)
 
         # adjust learning rate as you go
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -224,7 +221,7 @@ class Classifier(BaseTrainer):
         for epoch in range(1, self.config.training.n_epochs+1):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
-            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test(self.val_dataloader, 'val')
+            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data, val_mi = self.test(self.val_dataloader, 'val')
             scheduler.step()
             
             # check performance on validation set
@@ -235,8 +232,7 @@ class Classifier(BaseTrainer):
                 best_epoch = epoch
                 best = True
                 self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
-                if self.config.model.name == 'flow_mlp':
-                    self.flow_diagnostics(step=epoch, n_row=10)
+                # self.flow_diagnostics(step=epoch, n_row=10)
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)
@@ -246,22 +242,26 @@ class Classifier(BaseTrainer):
             test_loss_db[epoch-1] = val_loss
             tr_acc_db[epoch - 1] = tr_acc
             test_acc_db[epoch - 1] = val_acc
+            est_mi_db[epoch-1] = val_mi
         # evaluate on test
-        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
+        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data, test_mi = self.test(self.test_dataloader, 'test')
         
         # TODO: save metrics
         self.plot_train_test_curves(tr_loss_db, test_loss_db)
         self.plot_train_test_curves(tr_acc_db, test_acc_db, metric='Accuracy', title='train_curve_acc')
+        self.plot_mi(est_mi_db, self.test_dataloader.dataset.mi)
         print('Completed training! Best performance at epoch {}, loss: {}, acc: {}'.format(best_epoch, best_loss, best_acc))
         # TODO: also save test metrics
         np.save(os.path.join(self.output_dir, 'tr_loss.npy'), tr_loss_db)
         np.save(os.path.join(self.output_dir, 'val_loss.npy'), test_loss_db)
         np.save(os.path.join(self.output_dir, 'tr_acc.npy'), tr_acc_db)
         np.save(os.path.join(self.output_dir, 'val_acc.npy'), test_acc_db)
+        np.save(os.path.join(self.output_dir, 'est_mi.npy'), est_mi_db)
 
     def test(self, loader, test_type):
         # get meters ready
         loss_meter = utils.AverageMeter()
+        mi_meter = utils.AverageMeter()
         summary = {'avg_loss': 0, 'avg_acc': 0}
 
         num_pos_samples = 0
@@ -308,6 +308,10 @@ class Classifier(BaseTrainer):
                 num_pos_correct += (y_preds[y == 1] == y[y == 1]).sum()
                 num_neg_correct += (y_preds[y == 0] == y[y == 0]).sum()
 
+                # estimate MI
+                est_mi = self.estimate_mi(logits)
+                mi_meter.update(est_mi.item())
+
                 # save items
                 labels.append(y.cpu())
                 p_y1.append(probs)
@@ -316,11 +320,14 @@ class Classifier(BaseTrainer):
         avg_acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
         avg_acc = avg_acc.detach().cpu().numpy()
         # Completed running test
-        print('Completed evaluation: {} loss: {}, {} acc: {}'.format(
+        print('Completed evaluation: {} loss: {}, {} acc: {}, est. MI: {} (true MI={})'.format(
             test_type,
             np.round(loss_meter.avg, 3), 
             test_type,
-            np.round(avg_acc, 3)))
+            np.round(avg_acc, 3),
+            np.round(mi_meter.avg, 3),
+            self.test_dataloader.dataset.mi,
+            ))
         summary.update(
             dict(avg_loss=np.round(loss_meter.avg, 3),
                 avg_acc=np.round(avg_acc, 3)))
@@ -338,7 +345,7 @@ class Classifier(BaseTrainer):
         p_y1 = p_y1.data.cpu().numpy()
         data = data.data.cpu().numpy()
 
-        return loss_meter.avg, avg_acc, labels, p_y1, ratios, data
+        return loss_meter.avg, avg_acc, labels, p_y1, ratios, data, mi_meter.avg
 
     def clf_diagnostics(self, y_valid, valid_prob_pos, ratios, val_x, split):
             """
@@ -388,20 +395,24 @@ class Classifier(BaseTrainer):
         plt.savefig(
             os.path.join(self.output_dir, '{}.png'.format(title)), dpi=200)
 
-    def get_density_ratios(self, x, log=False):
-        from torch.distributions import Normal
-        p_mu = self.config.data.mus[0]
-        q_mu = self.config.data.mus[1]
+    def plot_mi(self, est_mi, true_mi, title='est_mi'):
+        sns.set_context('paper', font_scale=2)
+        sns.set_style('whitegrid')
 
-        log_p = Normal(p_mu, 1).log_prob(x).sum(-1)
-        log_q = Normal(q_mu, 1).log_prob(x).sum(-1)
-        log_r = log_q - log_p  # ref/bias
-        if log:
-            r = log_r
-        else:
-            r = torch.exp(log_r)
+        n = len(est_mi)
+        plt.figure(figsize=(8,5))
+        plt.plot(range(len(est_mi)), est_mi, '-o', label='est. MI')
+        plt.hlines(true_mi, 0, len(est_mi), label='true MI', color='black')
 
-        return r
+        plt.title('Estimated MI', fontsize=22)
+        plt.xlabel('Epoch', fontsize=20)
+        plt.ylabel('MI', fontsize=20)
+        plt.legend(loc='upper right', fontsize=15)
+
+        sns.despine()
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(self.output_dir, '{}.png'.format(title)), dpi=200)
 
     def flow_diagnostics(self, step, n_row=10):
         self.model.eval()

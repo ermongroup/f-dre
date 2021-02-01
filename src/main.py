@@ -14,6 +14,7 @@ from flows.trainers.flow import Flow
 from flows.trainers.toy_flow import ToyFlow
 from classification.trainers.classifier import Classifier
 from classification.trainers.attr_classifier import AttrClassifier
+from classification.trainers.mi_classifier import MIClassifier
 
 import getpass
 import wandb
@@ -47,16 +48,15 @@ def parse_args_and_config():
     parser.add_argument('--fair_generate', action='store_true', help='Sample with DRE reweighting using SIR. Must specify --dre_clf_ckpt.')
     parser.add_argument('--fid', action='store_true', help='FID sampling')
     
-    # ======== Params for --fair_generate ========
-    parser.add_argument('--alpha', type=float, default=0, help='alpha for DRE flattening')
-    
     # ======== Sampling classifiers: --attr_clf_ckpt for classifying sample attributes, --dre_clf_ckpt for --fair-generate ========
     parser.add_argument('--attr_clf_ckpt', default=None, help='Path to pretrained attribute classifier checkpoint; if provided, classify the flow samples.')
     parser.add_argument('--dre_clf_ckpt', default=None, help='Path to pretrained DRE classifier checkpoint to use for reweighting.')
     
     # ======== Classification-related (TODO: integrate classifier and flow into same main.py?) ========
     parser.add_argument('--classify', action='store_true', help='To run classification')
+    parser.add_argument('--dre_x', action='store_true', help='DRE classification in x-space')
     parser.add_argument('--attr', default=None, help='For attr classification, provide one of \{\'background\', \'digit\'\}')
+    parser.add_argument('--mi', action='store_true', help='To run MI estimation')
     # parser.add_argument('--dre', action='store_true', help='Run DRE classification of z-encodings')  
     
     # parse args and config
@@ -172,12 +172,15 @@ def main():
 
     try:
         if args.classify:
-            if args.attr is not None:
+            if args.attr is not None or args.dre_x:
                 trainer = AttrClassifier(args, config)
             else:
-                trainer = Classifier(args, config)
+                if args.mi:
+                    trainer = MIClassifier(args, config)
+                else:
+                    trainer = Classifier(args, config)
         else:
-            if config.data.dataset not in ['GMM', 'GMM_flow']:
+            if config.data.dataset not in ['GMM', 'GMM_flow', 'MI', 'MI_flow']:
                 trainer = Flow(args, config)
             else:
                 trainer = ToyFlow(args, config)
@@ -189,7 +192,10 @@ def main():
         else:
             trainer.train()
             if args.classify:
-                test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
+                if not args.mi:
+                    test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
+                else:
+                    test_loss, test_acc, test_labels, test_probs, test_ratios, test_data, test_mi = trainer.test(trainer.test_dataloader, 'test')
                 trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
     
     except Exception:

@@ -16,7 +16,7 @@ import classification.utils as utils
 #     SplitEncodedMNIST,
 #     SplitMNIST
 # )
-from classification.models.mlp import MLPClassifier
+from classification.models.mlp import MLPClassifierv2
 from classification.models.resnet import ResnetClassifier
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
@@ -63,7 +63,7 @@ class AttrClassifier(BaseTrainer):
 
     def get_model_cls(self, name):
         if name == 'mlp':
-            model_cls = MLPClassifier
+            model_cls = MLPClassifierv2
         elif name == 'resnet':
             model_cls = ResnetClassifier
         else:
@@ -73,7 +73,7 @@ class AttrClassifier(BaseTrainer):
         return model_cls(self.config)
 
     def get_loss(self):
-        if self.config.loss == 'bce':
+        if self.config.loss.name == 'bce':
             loss = F.binary_cross_entropy_with_logits
         else:
             loss = F.cross_entropy
@@ -99,7 +99,14 @@ class AttrClassifier(BaseTrainer):
     #     test = data_utils.DataLoader(test, batch_size=self.config.training.batch_size//2, shuffle=False)
 
     #     return train, val, test
-
+    def get_preds(self, logits):
+        with torch.no_grad():
+            if self.config.loss.name in ['bce', 'joint']:
+                y_preds = torch.round(torch.sigmoid(logits))
+            else:
+                probs = F.softmax(logits, dim=1)
+                _, y_preds = torch.max(probs, 1)
+        return y_preds
     def accuracy(self, logits, y):
         with torch.no_grad():
             if self.config.loss.name == 'bce':
@@ -132,11 +139,14 @@ class AttrClassifier(BaseTrainer):
                 z = z.to(self.device).view(len(z), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
             idx = torch.randperm(len(z))
             z = z[idx].to(self.device).float()
-            y = y[idx].to(self.device).long()
+            if self.config.loss.name == 'bce':
+                y = y[idx].to(self.device).float()
+            else:
+                y = y[idx].to(self.device).long()
             
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = self.model(z)
-            loss = self.loss(logits, y)
+            loss = self.loss(logits.squeeze(), y)
             loss_meter.update(loss.item())
 
             # check accuracy
@@ -197,7 +207,7 @@ class AttrClassifier(BaseTrainer):
         for epoch in range(1, self.config.training.n_epochs+1):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
-            val_loss, val_acc, val_labels, val_probs, val_ratios = self.test(self.val_dataloader, 'val')
+            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test(self.val_dataloader, 'val')
             scheduler.step()
             
             # check performance on validation set
@@ -206,7 +216,7 @@ class AttrClassifier(BaseTrainer):
                 best_acc = val_acc
                 best_epoch = epoch
                 best = True
-                self.clf_diagnostics(val_labels, val_probs, val_ratios, split='val')
+                self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)
@@ -217,7 +227,7 @@ class AttrClassifier(BaseTrainer):
             tr_acc_db[epoch - 1] = tr_acc
             test_acc_db[epoch - 1] = val_acc
         # evaluate on test
-        test_loss, test_acc, test_labels, test_probs, test_ratios = self.test(self.test_dataloader, 'test')
+        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
         
         # TODO: save metrics
         self.plot_train_test_curves(tr_loss_db, test_loss_db)
@@ -237,6 +247,7 @@ class AttrClassifier(BaseTrainer):
 
         # other items
         labels = []
+        data = []
         p_y1 = []
         num_examples = 0.
 
@@ -257,11 +268,14 @@ class AttrClassifier(BaseTrainer):
                 else:
                     z = z.to(self.device).view(len(z), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
                 z = z.to(self.device).float()
-                y = y.to(self.device).long()
+                if self.config.loss.name == 'bce':
+                    y = y.to(self.device).float()
+                else:
+                    y = y.to(self.device).long()
 
                 logits, probs = self.model(z)
-                loss = self.loss(logits, y, reduction='sum')
-                _, pred = torch.max(probs, 1)
+                loss = self.loss(logits.squeeze(), y, reduction='sum')
+                # pred = self.get_preds(logits.squeeze())
                 num_examples += y.size(0)
                 loss_meter.update(loss.item())
                 
@@ -272,6 +286,7 @@ class AttrClassifier(BaseTrainer):
                 # save items
                 labels.append(y.cpu())
                 p_y1.append(probs)
+                data.append(z)
         
         # Completed running test
         print('Completed evaluation: {} loss: {}, {} acc: {}'.format(
@@ -288,17 +303,26 @@ class AttrClassifier(BaseTrainer):
         # correctly format items to return
         labels = torch.cat(labels).data.cpu().numpy()
         p_y1 = torch.cat(p_y1)
-        ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
+        data = torch.cat(data)
+        if self.config.model.name == 'mlp':
+            log_ratios = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
+            ratios = torch.exp(log_ratios).data.cpu().numpy()
+        else:
+            ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
+        
         p_y1 = p_y1.data.cpu().numpy()
+        data = data.data.cpu().numpy()
 
-        return loss_meter.avg, acc_meter.avg, labels, p_y1, ratios
+        return loss_meter.avg, acc_meter.avg, labels, p_y1, ratios, data
 
-    def clf_diagnostics(self, y_valid, valid_prob_pos, ratios, split):
+    def clf_diagnostics(self, y_valid, valid_prob_pos, ratios, val_x, split):
             """
             function to check (1) classifier calibration; and (2) save weights
             """
             # assess calibration
-            fraction_of_positives, mean_predicted_value = calibration_curve(y_valid, valid_prob_pos[:, 1])
+            if self.config.model.name != 'mlp':
+                valid_prob_pos = valid_prob_pos[:, 1]
+            fraction_of_positives, mean_predicted_value = calibration_curve(y_valid, valid_prob_pos)
 
             # save calibration results
             np.save(os.path.join(self.output_dir, f'{split}_fraction_of_positives'), fraction_of_positives)
@@ -318,7 +342,7 @@ class AttrClassifier(BaseTrainer):
 
             # save density ratios
             np.savez(
-                os.path.join(self.output_dir, f'{split}_ratios.npz'), **{'ratios': ratios, 'd_labels': y_valid})
+                os.path.join(self.output_dir, f'{split}_ratios.npz'), **{'ratios': ratios, 'd_labels': y_valid, 'data': val_x})
 
     def plot_train_test_curves(self, tr_loss, test_loss, metric='Loss', title='train_curve_loss'):
         sns.set_context('paper', font_scale=2)
