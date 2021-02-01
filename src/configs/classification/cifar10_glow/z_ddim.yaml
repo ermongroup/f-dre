@@ -1,39 +1,40 @@
 training:
   batch_size: 128
-  n_epochs: 200
+  n_epochs: 20
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "joint_test"
+  exp_id: "cifar_ddim_z"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
 data:
-  dataset: "GMM"
+  dataset: "ZCIFAR10"
   subset: false
-  x_space: true
-  input_size: 2
+  x_space: false
+  input_size: 3072
   perc: 1.0
   mus: [0, 3]
   class_idx: 20
   num_workers: 4
+  rho: 0.9
 
 model:
-  name: "flow_mlp"
+  name: "mlp"
   spectral_norm: true
   batch_norm: true
-  in_dim: 2
-  h_dim: 200
+  in_dim: 3072
+  h_dim: 500
   dropout: 0.1
-  n_classes: 2
+  n_classes: 1
 
 optim:
-  weight_decay: 0.000001
+  weight_decay: 0.000
   optimizer: "Adam"
-  lr: 0.0001
+  lr: 0.0002
   beta1: 0.9
   amsgrad: false
 
 loss:
-  name: "joint"
-  alpha: 0.2
+  name: "bce"
+  alpha: 0.01

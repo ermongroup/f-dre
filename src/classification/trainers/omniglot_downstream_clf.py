@@ -1,23 +1,22 @@
 import os
 import sys
-
+# for module imports:
+sys.path.append(os.path.abspath(os.getcwd()))
 import copy
 import logging
 from pprint import pprint
 from tqdm import tqdm
 import numpy as np
 
-import classification.utils as utils
 from datasets.data import fetch_dataloaders
-from classification.models.mlp import (
-    MLPClassifier,
-    MLPClassifierv2
-)
-from classification.models.flow_mlp import FlowClassifier
+
+import classification.utils as utils
+from classification.models.cnn import CNNClassifier
+from classification.models.mlp import MLPClassifierv2
 from classification.models.resnet import ResnetClassifier
+from classification.models.networks import *
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
-from losses import joint_gen_disc_loss
 
 import torch
 import torch.optim as optim
@@ -34,7 +33,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 
-class MIClassifier(BaseTrainer):
+class OmniglotDownstreamClassifier(BaseTrainer):
     def __init__(self, args, config):
         self.args = args
         self.config = config
@@ -54,6 +53,17 @@ class MIClassifier(BaseTrainer):
         self.checkpoint_dir = os.path.join(self.output_dir, 'checkpoints')
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
+        # HACK FOR CIFAR10
+        if not self.config.model.baseline:
+            if self.config.data.x_space:
+                print('using x-space classifier')
+                self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_x_dre_cifar/checkpoints/model_best.pth')
+            else:
+                print('using z-space classifier')
+                # z-encoding
+                self.flow = self.load_flow()
+                self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_z_dre_cifar_v3/checkpoints/model_best.pth')
+
     def get_model(self):
         model = self.get_model_cls(self.config.model.name)
         model = model.to(self.config.device)
@@ -62,27 +72,69 @@ class MIClassifier(BaseTrainer):
 
     def get_model_cls(self, name):
         if name == 'mlp':
-            # model_cls = MLPClassifier
-            model_cls = MLPClassifierv2
+            model_cls = MLPClassifier
         elif name == 'resnet':
             model_cls = ResnetClassifier
-        elif name == 'flow_mlp':
-            if self.config.loss.name != 'joint':
-                print('Training flow + mlp discriminatively...')
-            else:
-                print('Training flow + mlp jointly...')
-            model_cls = FlowClassifier
+            # model_cls = Resnet_v2
+        elif name == 'resnet20':
+            model_cls = resnet20()
+            return model_cls
+        elif name == 'cnn':
+            model_cls = CNNClassifier()
+            return model_cls
         else:
             print('Model {} not found!'.format(name))
             raise NotImplementedError
 
         return model_cls(self.config)
 
+    def load_classifier(self, clf_path, attr=False):
+        """
+        Loads pretrained binary classifier for density ratio estimation in z-space
+        """
+        assert os.path.exists(clf_path)
+
+        print('loading dre classifier')
+        if self.config.data.x_space:
+            # model = MLPClassifier(self.config)
+            model = resnet20()
+        else:
+            model = MLPClassifierv2(self.config)
+            # model = resnet20()
+            # model = ResnetClassifier(self.args)
+            # model = FlowClassifier(self.config)
+        model = model.to(self.device)
+
+        # load checkpoint
+        print('loading clf from {}'.format(clf_path))
+        state = torch.load(clf_path)
+        model.load_state_dict(state['state_dict'])
+
+        return model
+
+    def load_flow(self):
+        raise NotImplementedError
+        # import json
+        # output_folder = '/atlas/u/kechoi/Glow-PyTorch/glow/'
+        # # model_name = 'glow_model_250.pth'
+        # model_name = 'glow_affine_coupling.pt'
+
+        # with open(output_folder + 'hparams.json') as json_file:  
+        #     hparams = json.load(json_file)
+        # image_shape = (32, 32, 3)  # HACK for CIFAR10
+        # num_classes = 10
+
+        # model = Glow(image_shape, hparams['hidden_channels'], hparams['K'], hparams['L'], hparams['actnorm_scale'], hparams['flow_permutation'], hparams['flow_coupling'], hparams['LU_decomposed'], num_classes, hparams['learn_top'], hparams['y_condition'])
+
+        # # load checkpoint
+        # model.load_state_dict(torch.load(output_folder + model_name))
+        # model.set_actnorm_init()
+        # model = model.to(self.config.device)
+        # return model
+
     def get_loss(self):
         if self.config.loss.name == 'bce':
             loss = F.binary_cross_entropy_with_logits
-        elif self.config.loss.name == 'joint':
-            loss = joint_gen_disc_loss
         else:
             loss = F.cross_entropy
         return loss
@@ -100,80 +152,67 @@ class MIClassifier(BaseTrainer):
 
     def accuracy(self, logits, y):
         with torch.no_grad():
-            if self.config.loss.name in ['bce', 'joint']:
+            if self.config.loss.name == 'bce':
                 y_preds = torch.round(torch.sigmoid(logits))
             else:
                 probs = F.softmax(logits, dim=1)
                 _, y_preds = torch.max(probs, 1)
             acc = (y_preds == y).sum()
+            # print(torch.unique(y_preds, return_counts=True))
             acc = torch.true_divide(acc, len(y_preds)).cpu().numpy()        
         
         return acc
 
-    def get_preds(self, logits):
-        with torch.no_grad():
-            if self.config.loss.name in ['bce', 'joint']:
-                y_preds = torch.round(torch.sigmoid(logits))
-            else:
-                probs = F.softmax(logits, dim=1)
-                _, y_preds = torch.max(probs, 1)
-        return y_preds
-
-    def estimate_mi(self, n=10000):
-        self.model.eval()
-        with torch.no_grad():
-            # test samples from joint
-            try:
-                samples = self.test_dataloader.dataset.joint.to(self.device)
-            except:
-                # this is for the separate flow encoding + clf dataset
-                samples = self.test_dataloader.dataset.joint.dataset
-                samples = torch.stack([x[0] for x in samples]).to(self.device)
-        logits, probas = self.model(samples)
-        mi = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
-        return mi.mean().item()
-
     def train_epoch(self, epoch):
         # get meters ready
         loss_meter = utils.AverageMeter()
+        acc_meter = utils.AverageMeter()
 
         # train classifier
         self.model.train()
         data_tqdm = tqdm(iter(self.train_dataloader), leave=False, total=len(self.train_dataloader))
 
-        num_pos_correct = 0
-        num_pos_samples = 0
-        num_neg_correct = 0
-        num_neg_samples = 0
-
-        for i, (z_ref, z_biased) in enumerate(data_tqdm):
-            z = torch.cat([z_ref, z_biased])
-            y = torch.cat([torch.ones(z_ref.shape[0]), torch.zeros(z_biased.shape[0])])
-
-            # random permutation of data
-            if 'mlp' in self.config.model.name:
-                z = z.to(self.device).view(len(z), -1)
-            else:
-                z = z.to(self.device).view(len(z), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
-            idx = torch.randperm(len(z))
-            z = z[idx].to(self.device).float()
+        for i, (x, y) in enumerate(data_tqdm):
+            idx = torch.randperm(len(x))
+            x = x[idx].to(self.device).float()
             y = y[idx].to(self.device).long()
+
+            if self.args.encode_z:
+                self.flow.eval()
+                x_hat = utils.glow_preprocess(x)
+                with torch.no_grad():
+                    z, _, _ = self.flow(x_hat)
+            else:
+                # no encoding
+                z = x
+            
+            if self.config.model.name =='mlp':
+                x = x.to(self.device).view(len(x), -1)
+            else:
+                x = x.to(self.device).view(len(x), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
             
             # NOTE: here, biased (y=0) and reference (y=1)
-            logits, _ = self.model(z)
-            if self.config.loss.name == 'joint':
-                loss = self.loss(self.model, z, logits, y, self.config.loss.alpha)
+            logits, _ = self.model(x)
+            loss = self.loss(logits.squeeze(), y.long(), reduction='none')
+
+            if not self.config.model.baseline:
+                # TODO: REWEIGHT THE LOSS
+                if not self.config.data.x_space:
+                    z = z.view(len(z), -1)
+                logits, probas = self.dre_clf(z)
+                log_r = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
+                ratios = torch.exp(log_r)
+                # reweight density ratios to account for flow
+                # if not self.config.data.x_space:
+                #     ratios = ratios/(0.6 * ratios + 0.4)
+                loss = (ratios * loss).mean()
             else:
-                loss = self.loss(logits.squeeze(), y.float())
+                loss = loss.mean()
             loss_meter.update(loss.item())
 
             # check accuracy
-            y_preds = self.get_preds(logits.squeeze())
-            num_pos_samples += y.sum()
-            num_neg_samples += y.size(0) - y.sum()
-            num_pos_correct += (y_preds[y == 1] == y[y == 1]).sum()
-            num_neg_correct += (y_preds[y == 0] == y[y == 0]).sum()
-            acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
+            accs = self.accuracy(logits.squeeze(), y.squeeze())
+            acc_meter.update(accs)
 
             # gradient update
             self.optimizer.zero_grad()
@@ -181,12 +220,12 @@ class MIClassifier(BaseTrainer):
             self.optimizer.step()
 
             # get summary
-            summary = dict(avg_loss=loss.item(), clf_acc=acc)
+            summary = dict(avg_loss=loss.item(), clf_acc=acc_meter.avg)
 
             if (i + 1) % self.config.training.iter_log == 0:
                 summary.update(
                     dict(avg_loss=np.round(loss.float().item(), 3),
-                        clf_acc=np.round(acc.detach().cpu().numpy(), 3)))
+                        clf_acc=np.round(acc_meter.avg, 3)))
                 print()
                 pprint(summary)
 
@@ -195,33 +234,28 @@ class MIClassifier(BaseTrainer):
             data_tqdm.set_description(desc)
             data_tqdm.update(z.shape[0])
         # end of training epoch
-        avg_acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
-        avg_acc = avg_acc.detach().cpu().numpy()
         print()
         print('Completed epoch {}: train loss: {}, train acc: {}'.format(
             epoch, 
             np.round(loss_meter.avg, 3), 
-            np.round(avg_acc, 3)))
+            np.round(acc_meter.avg, 3)))
         summary.update(dict(
             avg_loss=loss_meter.avg,
-            avg_acc=avg_acc))
+            avg_acc=acc_meter.avg))
         # pprint(summary)
 
-        return loss_meter.avg, avg_acc
+        return loss_meter.avg, acc_meter.avg
 
     def train(self):
         best = False
         best_loss = sys.maxsize
+        best_test_acc = -sys.maxsize
         best_acc = -sys.maxsize
         best_epoch = 1
         tr_loss_db = np.zeros(self.config.training.n_epochs)
         test_loss_db = np.zeros(self.config.training.n_epochs)
         tr_acc_db = np.zeros(self.config.training.n_epochs)
         test_acc_db = np.zeros(self.config.training.n_epochs)
-        est_mi_db = np.zeros(self.config.training.n_epochs)
-
-        # true mi
-        true_mi = self.test_dataloader.dataset.mi
 
         # adjust learning rate as you go
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -235,20 +269,20 @@ class MIClassifier(BaseTrainer):
         for epoch in range(1, self.config.training.n_epochs+1):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
-            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test(self.val_dataloader, 'val')
-            est_mi = self.estimate_mi()
-            print('Estimated MI: {} (true MI: {})'.format(est_mi, true_mi))
+            val_loss, val_acc, val_labels, val_probs, val_ratios = self.test(self.val_dataloader, 'val')
+            # evaluate on test
+            test_loss, test_acc, test_labels, test_probs, test_ratios = self.test(self.test_dataloader, 'test')
             scheduler.step()
             
             # check performance on validation set
-            if val_loss < best_loss:
-                print('saving best model..')
-                best_acc = val_acc
+            if val_acc >= best_acc:
+            # if val_loss < best_loss:
                 best_loss = val_loss
+                best_acc = val_acc
                 best_epoch = epoch
                 best = True
-                self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
-                # self.flow_diagnostics(step=epoch, n_row=10)
+                best_test_acc = test_acc
+                # self.clf_diagnostics(val_labels, val_probs, val_ratios, split='val')
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)
@@ -258,36 +292,29 @@ class MIClassifier(BaseTrainer):
             test_loss_db[epoch-1] = val_loss
             tr_acc_db[epoch - 1] = tr_acc
             test_acc_db[epoch - 1] = val_acc
-            est_mi_db[epoch-1] = est_mi
         # evaluate on test
-        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
+        test_loss, test_acc, test_labels, test_probs, test_ratios = self.test(self.test_dataloader, 'test')
         
         # TODO: save metrics
         self.plot_train_test_curves(tr_loss_db, test_loss_db)
         self.plot_train_test_curves(tr_acc_db, test_acc_db, metric='Accuracy', title='train_curve_acc')
-        self.plot_mi(est_mi_db, self.test_dataloader.dataset.mi)
         print('Completed training! Best performance at epoch {}, loss: {}, acc: {}'.format(best_epoch, best_loss, best_acc))
+        print('The best test accuracy achieved at this checkpoint is: {}'.format(best_test_acc))
         # TODO: also save test metrics
         np.save(os.path.join(self.output_dir, 'tr_loss.npy'), tr_loss_db)
         np.save(os.path.join(self.output_dir, 'val_loss.npy'), test_loss_db)
         np.save(os.path.join(self.output_dir, 'tr_acc.npy'), tr_acc_db)
         np.save(os.path.join(self.output_dir, 'val_acc.npy'), test_acc_db)
-        np.save(os.path.join(self.output_dir, 'est_mi.npy'), est_mi_db)
 
     def test(self, loader, test_type):
         # get meters ready
         loss_meter = utils.AverageMeter()
+        acc_meter = utils.AverageMeter()
         summary = {'avg_loss': 0, 'avg_acc': 0}
-
-        num_pos_samples = 0
-        num_neg_samples = 0
-        num_pos_correct = 0
-        num_neg_correct = 0
 
         # other items
         labels = []
         p_y1 = []
-        data = []
         num_examples = 0.
 
         with torch.no_grad():
@@ -295,68 +322,78 @@ class MIClassifier(BaseTrainer):
 
             # test classifier
             t = tqdm(iter(loader), leave=False, total=len(loader))
-            for i, (z_ref, z_biased) in enumerate(t):
-                z = torch.cat([z_ref, z_biased])
-                y = torch.cat([
-                    torch.ones(z_ref.shape[0]),
-                    torch.zeros(z_biased.shape[0])
-                ])
-                
-                if 'mlp' in self.config.model.name:
-                    z = z.to(self.device).view(len(z), -1)
-                else:
-                    z = z.to(self.device).view(len(z), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
-                y = y.to(self.device).long()
+            for i, (x, y) in enumerate(t):
+                x = x.to(self.device).float()
+                y = y.to(self.device).float()
 
-                logits, probs = self.model(z)
-                if self.config.loss.name == 'joint':
-                    loss = self.loss(self.model, z, logits, y, self.config.loss.alpha)
+                # TODO: probs do something about this
+                # if self.args.encode_z:
+                #     self.flow.eval()
+                #     x_hat = utils.glow_preprocess(x)
+                #     z, _, _ = self.flow(x_hat)
+                # else:
+                #     # no encoding
+                #     z = x
+                # # get density ratios
+                # if not self.config.data.x_space:
+                #     z = z.view(len(z), -1)
+                #     logits, probas = self.dre_clf(z)
+                #     log_r = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
+                #     ratios = torch.exp(log_r)
+
+                if self.config.model.name =='mlp':
+                    x = x.view(len(x), -1)
                 else:
-                    loss = self.loss(logits.squeeze(), y.float())
+                    x = x.view(len(x), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
+                logits, probs = self.model(x)
+                loss = self.loss(logits.squeeze(), y.long(), reduction='none')
+
+                if not self.config.model.baseline:
+                    # do you need the reweighted loss here?
+                    if not self.config.data.x_space:
+                        # TODO: fix for z-space
+                        ratios = ratios
+                    loss = (ratios * loss).mean()
+                else:
+                    loss = loss.mean()
+
+                # accuracy
                 num_examples += y.size(0)
                 loss_meter.update(loss.item())
                 
                 # TODO: check accuracy between classes
-                y_preds = self.get_preds(logits.squeeze())
-                num_pos_samples += y.sum()
-                num_neg_samples += y.size(0) - y.sum()
-                num_pos_correct += (y_preds[y == 1] == y[y == 1]).sum()
-                num_neg_correct += (y_preds[y == 0] == y[y == 0]).sum()
+                accs = self.accuracy(logits.squeeze(), y.squeeze())
+                acc_meter.update(accs)
 
                 # save items
                 labels.append(y.cpu())
                 p_y1.append(probs)
-                data.append(z)
         
-        avg_acc = (num_pos_correct / num_pos_samples + num_neg_correct / num_neg_samples) / 2
-        avg_acc = avg_acc.detach().cpu().numpy()
         # Completed running test
         print('Completed evaluation: {} loss: {}, {} acc: {}'.format(
             test_type,
             np.round(loss_meter.avg, 3), 
             test_type,
-            np.round(avg_acc, 3)
-        ))
+            np.round(acc_meter.avg, 3)))
         summary.update(
             dict(avg_loss=np.round(loss_meter.avg, 3),
-                avg_acc=np.round(avg_acc, 3)))
+                avg_acc=np.round(acc_meter.avg, 3)))
         print()
         # pprint(summary)
 
         # correctly format items to return
-        labels = torch.cat(labels).data.cpu().numpy()
-        p_y1 = torch.cat(p_y1)
-        data = torch.cat(data)
-        if self.config.loss.name not in ['bce', 'joint']:
-            ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
-        else:
-            ratios = (p_y1/(1-p_y1)).data.cpu().numpy()
+        labels = torch.cat(labels).squeeze()
+        labels = labels.data.cpu().numpy()
+        p_y1 = torch.cat(p_y1).squeeze()
+        # from utils import logsumexp_1p
+        ratios = p_y1/(1-p_y1)
+        ratios = ratios.data.cpu().numpy()
+        # ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
         p_y1 = p_y1.data.cpu().numpy()
-        data = data.data.cpu().numpy()
 
-        return loss_meter.avg, avg_acc, labels, p_y1, ratios, data
+        return loss_meter.avg, acc_meter.avg, labels, p_y1, ratios
 
-    def clf_diagnostics(self, y_valid, valid_prob_pos, ratios, val_x, split):
+    def clf_diagnostics(self, y_valid, valid_prob_pos, ratios, split):
             """
             function to check (1) classifier calibration; and (2) save weights
             """
@@ -382,7 +419,7 @@ class MIClassifier(BaseTrainer):
 
             # save density ratios
             np.savez(
-                os.path.join(self.output_dir, f'{split}_ratios.npz'), **{'ratios': ratios, 'd_labels': y_valid, 'data': val_x})
+                os.path.join(self.output_dir, f'{split}_ratios.npz'), **{'ratios': ratios, 'd_labels': y_valid})
 
     def plot_train_test_curves(self, tr_loss, test_loss, metric='Loss', title='train_curve_loss'):
         sns.set_context('paper', font_scale=2)
@@ -403,66 +440,3 @@ class MIClassifier(BaseTrainer):
         plt.tight_layout()
         plt.savefig(
             os.path.join(self.output_dir, '{}.png'.format(title)), dpi=200)
-
-    def plot_mi(self, est_mi, true_mi, title='est_mi'):
-        sns.set_context('paper', font_scale=2)
-        sns.set_style('whitegrid')
-
-        n = len(est_mi)
-        plt.figure(figsize=(8,5))
-        plt.plot(range(len(est_mi)), est_mi, '-o', label='est. MI')
-        plt.hlines(true_mi, 0, len(est_mi), label='true MI', color='black')
-
-        plt.title('Estimated MI', fontsize=22)
-        plt.xlabel('Epoch', fontsize=20)
-        plt.ylabel('MI', fontsize=20)
-        plt.legend(loc='upper right', fontsize=15)
-
-        sns.despine()
-        plt.tight_layout()
-        plt.savefig(
-            os.path.join(self.output_dir, '{}.png'.format(title)), dpi=200)
-
-    def flow_diagnostics(self, step, n_row=10):
-        self.model.eval()
-
-        dset1 = torch.stack([x[0] for x in self.test_dataloader.dataset.ref_dset.dataset])
-        dset2 = torch.stack([x[0] for x in self.test_dataloader.dataset.biased_dset.dataset])
-        data = torch.cat([dset1, dset2])
-        data = data.to(self.device)
-        u, _ = self.model.flow.forward(data)
-
-        # can you actually get samples?
-        ux = self.model.flow.base_dist.sample((len(data),))
-        samples, _ = self.model.flow.inverse(ux)
-
-        # get ratios first
-        xs = data.detach().cpu()
-        log_ratios = self.get_density_ratios(xs, log=True)
-        log_ratios_samples = self.get_density_ratios(samples.detach().cpu(), log=True)
-        rs = torch.cat([log_ratios, log_ratios_samples])
-        min_, max_ = rs.min(), rs.max()
-
-        # TODO: i think it'd be nice to look at densities learned by the flow too!
-
-        # plotting
-        plt.figure(figsize=(9,4))
-        plt.subplot(1,2,1)
-        plt.scatter(xs[:,0].data.cpu().numpy(), xs[:,1].data.cpu().numpy(), s=10, c=log_ratios.data.cpu().numpy(), label='data')
-        plt.clim(min_, max_)
-        plt.title('Data: log r(x)', fontsize=15)
-        sns.despine()
-
-        plt.subplot(1,2,2)
-        xs = samples.detach().cpu()
-        plt.scatter(xs[:,0].data.cpu().numpy(), xs[:,1].data.cpu().numpy(), s=10, c=log_ratios_samples.data.cpu().numpy(), label='samples')
-        plt.clim(min_, max_)
-        plt.title('Samples: log r(x)', fontsize=15)
-        sns.despine()
-
-        # format and save
-        plt.colorbar()
-        matplotlib.rcParams.update({'xtick.labelsize': 'xx-small', 'ytick.labelsize': 'xx-small'})
-        plt.tight_layout()
-        plt.savefig(os.path.join(self.output_dir, 'sample' + (step != None)*'_epoch_{}'.format(step) + '.png'))
-        plt.close()

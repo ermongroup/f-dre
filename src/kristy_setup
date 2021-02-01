@@ -1,3 +1,8 @@
+[Omniglot]
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/baseline.yaml --exp_id=omniglot_baseline --ni --classify --downstream
+
+
+----
 [TOY GMM EXPERIMENTS]
 # toy flow
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/gmm/perc0.1.yaml --exp_id=gmm_perc0.1 --ni
@@ -61,20 +66,57 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/gmm/jo
 
 ----------
 [MUTUAL INFORMATION EXPERIMENTS]
-1. (JOINT BASELINE)
+1. (JOINT BASELINE) ---- # 3
 CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_flow_perc1.0.yaml  --exp_id mi_flow_mlp_perc1.0 --ni --mi
 
-2. (PURELY DISCRIMINATIVE BASELINE)
+(another one with a=0.9?)
+CUDA_VISIBLE_DEVICES=1 python3 main.py --classify --config classification/mi/joint_flow_perc1.0_a0.9.yaml  --exp_id mi_flow_mlp_perc1.0_alpha0.9 --ni --mi
+
+CUDA_VISIBLE_DEVICES=1 python3 main.py --classify --config classification/mi/joint_flow_perc1.0_a0.5.yaml  --exp_id mi_flow_mlp_perc1.0_alpha0.5 --ni --mi
+
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_flow_perc1.0_a0.1.yaml  --exp_id mi_flow_mlp_perc1.0_alpha0.1 --ni --mi
+
+2. (PURELY DISCRIMINATIVE BASELINE) ---- # 1
 # TODO: need to incorporate InfoNCE HERE!!!!
 CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/disc_flow_perc1.0.yaml  --exp_id mi_disc_flow_mlp_perc1.0 --ni --mi
 
-3. (X-SPACE BASELINE)
+3. (X-SPACE BASELINE) ---- # 2
 CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/mi_perc1.0.yaml  --exp_id mi_perc1.0 --ni --mi
 
 4. (TRAIN FLOW): TODO NEED TO TRAIN MY FLOW HERE
+# (a=0.01)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/mi/perc1.0.yaml --exp_id=mi_flow_perc1.0 --ni
 
 4a. (ENCODE)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/mi/perc1.0.yaml --exp_id encode_mi_perc1.0 --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/mi_flow_perc1.0/ --sample --encode_z --ni
 
 # need to change MI_flow -> MI in data encodings path
+---- # 4
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/mlp_z_perc1.0.yaml  --exp_id mi_z_perc1.0 --ni --mi
+
+
+
+------
+# can we do this for dim=40??
+(PURELY DISCRIMINATIVE BASELINE)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/disc_flow_d40_perc1.0.yaml  --exp_id mi_disc_d40_perc1.0 --ni --mi
+
+(rho=0.9)
+CUDA_VISIBLE_DEVICES=1 python3 main.py --classify --config classification/mi/disc_test.yaml  --exp_id mi_disc_d40_perc1.0_v2 --ni --mi
+
+
+(JOINT TRAINING)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_flow_d40_a0.1.yaml  --exp_id mi_joint_d40_alpha0.1 --ni --mi
+
+CUDA_VISIBLE_DEVICES=1 python3 main.py --classify --config classification/mi/joint_flow_d40_a0.5.yaml  --exp_id mi_joint_d40_alpha0.5 --ni --mi
+
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_flow_d40_a0.9.yaml  --exp_id mi_joint_d40_alpha0.9 --ni --mi
+
+(rho=0.9)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_test.yaml  --exp_id mi_joint_d40_alpha0.9_rho0.9_v2 --ni --mi
+
+(TRAIN FLOW)
+CUDA_VISIBLE_DEVICES=1 python3 main.py --config flows/mi/test.yaml --exp_id=mi_flow_perc1.0_v2 --ni
+
+(X BASELINE)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/mi_test.yaml  --exp_id mi_perc1.0_v2 --ni --mi

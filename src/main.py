@@ -13,8 +13,11 @@ sys.path.append(os.path.abspath(os.getcwd()))
 from flows.trainers.flow import Flow
 from flows.trainers.toy_flow import ToyFlow
 from classification.trainers.classifier import Classifier
+from classification.trainers.old_classifier import OldClassifier
 from classification.trainers.attr_classifier import AttrClassifier
 from classification.trainers.mi_classifier import MIClassifier
+from classification.trainers.downstream_classifier import DownstreamClassifier
+from classification.trainers.omniglot_downstream_clf import OmniglotDownstreamClassifier
 
 import getpass
 import wandb
@@ -57,6 +60,7 @@ def parse_args_and_config():
     parser.add_argument('--dre_x', action='store_true', help='DRE classification in x-space')
     parser.add_argument('--attr', default=None, help='For attr classification, provide one of \{\'background\', \'digit\'\}')
     parser.add_argument('--mi', action='store_true', help='To run MI estimation')
+    parser.add_argument('--downstream', action='store_true', help='Run downstream classifier for domain adaptation experiment')
     # parser.add_argument('--dre', action='store_true', help='Run DRE classification of z-encodings')  
     
     # parse args and config
@@ -174,11 +178,22 @@ def main():
         if args.classify:
             if args.attr is not None or args.dre_x:
                 trainer = AttrClassifier(args, config)
+                print('training attribute/standard (non-dre)/DRE classifier...')
+
             else:
                 if args.mi:
                     trainer = MIClassifier(args, config)
+                elif args.downstream:
+                    print('Training downstream classifier...')
+                    if config.data.dataset == 'Omniglot':
+                        print('omniglot downstream task')
+                        trainer = OmniglotDownstreamClassifier(args, config)
+                    else:
+                        trainer = DownstreamClassifier(args, config)
                 else:
-                    trainer = Classifier(args, config)
+                    print('Using DRE classifier...')
+                    # trainer = Classifier(args, config)
+                    trainer = OldClassifier(args, config)
         else:
             if config.data.dataset not in ['GMM', 'GMM_flow', 'MI', 'MI_flow']:
                 trainer = Flow(args, config)
@@ -191,12 +206,11 @@ def main():
             trainer.test()
         else:
             trainer.train()
-            if args.classify:
-                if not args.mi:
-                    test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
-                else:
-                    test_loss, test_acc, test_labels, test_probs, test_ratios, test_data, test_mi = trainer.test(trainer.test_dataloader, 'test')
-                trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
+            if args.classify and config.data.dataset != 'Omniglot':
+                # test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
+                # trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
+                test_loss, test_acc, test_labels, test_probs, test_ratios = trainer.test(trainer.test_dataloader, 'test')
+                trainer.clf_diagnostics(test_labels, test_probs, test_ratios, 'test')
     
     except Exception:
         logging.error(traceback.format_exc())

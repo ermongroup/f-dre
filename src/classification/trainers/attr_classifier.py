@@ -11,13 +11,9 @@ import numpy as np
 from datasets.data import fetch_dataloaders
 
 import classification.utils as utils
-# import classification.dsets as dsets
-# from classification.dsets.flipped_mnist import (
-#     SplitEncodedMNIST,
-#     SplitMNIST
-# )
-from classification.models.mlp import MLPClassifierv2
+from classification.models.mlp import MLPClassifier
 from classification.models.resnet import ResnetClassifier
+from classification.models.networks import *
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
 
@@ -66,6 +62,10 @@ class AttrClassifier(BaseTrainer):
             model_cls = MLPClassifierv2
         elif name == 'resnet':
             model_cls = ResnetClassifier
+            # model_cls = Resnet_v2
+        elif name == 'resnet20':
+            model_cls = resnet20()
+            return model_cls
         else:
             print('Model {} not found!'.format(name))
             raise NotImplementedError
@@ -129,9 +129,6 @@ class AttrClassifier(BaseTrainer):
         data_tqdm = tqdm(iter(self.train_dataloader), leave=False, total=len(self.train_dataloader))
 
         for i, (z, y) in enumerate(data_tqdm):
-            # z = torch.cat([z_ref, z_biased])
-            # y = torch.cat([torch.ones(z_ref.shape[0]), torch.zeros(z_biased.shape[0])])
-
             # random permutation of data
             if self.config.model.name =='mlp':
                 z = z.to(self.device).view(len(z), -1)
@@ -146,11 +143,11 @@ class AttrClassifier(BaseTrainer):
             
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = self.model(z)
-            loss = self.loss(logits.squeeze(), y)
+            loss = self.loss(logits.squeeze(), y.float())
             loss_meter.update(loss.item())
 
             # check accuracy
-            accs = self.accuracy(logits.squeeze(), y)
+            accs = self.accuracy(logits.squeeze(), y.squeeze())
             acc_meter.update(accs)
 
             # gradient update
@@ -211,7 +208,8 @@ class AttrClassifier(BaseTrainer):
             scheduler.step()
             
             # check performance on validation set
-            if val_acc >= best_acc:
+            # if val_acc >= best_acc:
+            if val_loss < best_loss:
                 best_loss = val_loss
                 best_acc = val_acc
                 best_epoch = epoch
@@ -257,12 +255,6 @@ class AttrClassifier(BaseTrainer):
             # test classifier
             t = tqdm(iter(loader), leave=False, total=len(loader))
             for i, (z, y) in enumerate(t):
-                # z = torch.cat([z_ref, z_biased])
-                # y = torch.cat([
-                #     torch.ones(z_ref.shape[0]),
-                #     torch.zeros(z_biased.shape[0])
-                # ])
-                
                 if self.config.model.name =='mlp':
                     z = z.to(self.device).view(len(z), -1)
                 else:
@@ -274,13 +266,13 @@ class AttrClassifier(BaseTrainer):
                     y = y.to(self.device).long()
 
                 logits, probs = self.model(z)
-                loss = self.loss(logits.squeeze(), y, reduction='sum')
-                # pred = self.get_preds(logits.squeeze())
+                loss = self.loss(logits.squeeze(), y.float())
+                # _, pred = torch.max(probs, 1)
                 num_examples += y.size(0)
                 loss_meter.update(loss.item())
                 
                 # TODO: check accuracy between classes
-                accs = self.accuracy(logits.squeeze(), y)
+                accs = self.accuracy(logits.squeeze(), y.squeeze())
                 acc_meter.update(accs)
 
                 # save items
@@ -301,15 +293,13 @@ class AttrClassifier(BaseTrainer):
         # pprint(summary)
 
         # correctly format items to return
-        labels = torch.cat(labels).data.cpu().numpy()
-        p_y1 = torch.cat(p_y1)
-        data = torch.cat(data)
-        if self.config.model.name == 'mlp':
-            log_ratios = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
-            ratios = torch.exp(log_ratios).data.cpu().numpy()
-        else:
-            ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
-        
+        labels = torch.cat(labels).squeeze()
+        labels = labels.data.cpu().numpy()
+        p_y1 = torch.cat(p_y1).squeeze()
+        # from utils import logsumexp_1p
+        ratios = p_y1/(1-p_y1)
+        ratios = ratios.data.cpu().numpy()
+        # ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
         p_y1 = p_y1.data.cpu().numpy()
         data = data.data.cpu().numpy()
 

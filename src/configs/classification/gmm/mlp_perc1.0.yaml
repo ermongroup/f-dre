@@ -4,7 +4,7 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "gmm_perc1.0_v2"
+  exp_id: "gmm_perc1.0_gp"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
@@ -36,3 +36,4 @@ optim:
 
 loss:
   name: "bce"
+  alpha: 100
