@@ -1,0 +1,61 @@
+[Omniglot experiments]
+1. (baseline data in x-space) --> ~ 72% on test
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/baseline.yaml --exp_id=omniglot_baseline --ni --classify --downstream
+
+
+
+2. (baseline generated samples in x-space)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/gen_baseline.yaml --exp_id=omniglot_gen_baseline --ni --classify --downstream
+
+
+
+3. (baseline data augmentation: data + samples)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/mix_baseline.yaml --exp_id=omniglot_mix_baseline --ni --classify --downstream
+
+
+
+
+5. (x-space dre with samples + data)
+(a) train dre classifier
+
+
+(b) train downstream classifier
+
+
+
+----
+6. (z-space dre with only samples + data)
+(a) train the flow and classifier
+
+
+
+
+(b) train the downstream classifier
+
+
+
+
+----
+4. (x-space dre with only samples) --> ??? (hold off for now)
+
+
+
+
+5. (z-space dre with only samples) --> actually maybe we can hold off on this
+(a) train the flow
+
+
+
+(b) train the downstream classifier
+
+
+
+
+
+
+
+
+
+
+
+

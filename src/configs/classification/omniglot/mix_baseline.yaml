@@ -4,15 +4,15 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "omniglot_baseline"
+  exp_id: "omniglot_mix_baseline"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
 data:
-  dataset: "Omniglot"
+  dataset: "Omniglot_Mixture"
   subset: false
   x_space: true
-  synthetic: false
+  synthetic: true
   input_size: 784
   image_size: 28
   channels: 1

@@ -329,7 +329,13 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         val_dataset = ConcatDataset([val_biased, val_ref])
         test_dataset = ConcatDataset([test_biased, test_ref])
 
+    elif dataset_name == 'Omniglot_Mixture':
+        return NotImplementedError
+
     elif dataset_name == 'Omniglot':
+        if config.data.synthetic:
+            print('running classifier on synthetic examples only...')
+
         input_dims = config.data.input_size
         label_size = 1622
         lam = 1e-6
@@ -339,9 +345,9 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
             T.ToTensor()
         ])
 
-        train_dataset = Omniglot(config.training.data_dir, config, split='train', transform=train_transform)
-        val_dataset = Omniglot(config.training.data_dir, config, split='val', transform=train_transform)
-        test_dataset = Omniglot(config.training.data_dir, config, split='test', transform=test_transform)
+        train_dataset = Omniglot(config.training.data_dir, config, split='train', transform=train_transform, synthetic=config.data.synthetic)
+        val_dataset = Omniglot(config.training.data_dir, config, split='val', transform=train_transform, synthetic=config.data.synthetic)
+        test_dataset = Omniglot(config.training.data_dir, config, split='test', transform=test_transform, synthetic=config.data.synthetic)
 
     elif dataset_name in ['ZCIFAR10']:
         input_dims = config.data.input_size

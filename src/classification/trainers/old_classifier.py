@@ -157,7 +157,7 @@ class OldClassifier(BaseTrainer):
             z = z[idx].to(self.device).float()
             y = y[idx].to(self.device).long()
 
-            z.requires_grad_(True)
+            # z.requires_grad_(True)
             
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = self.model(z)
@@ -177,11 +177,11 @@ class OldClassifier(BaseTrainer):
 
             # gradient update
             self.optimizer.zero_grad()
-            loss.backward(retain_graph=True)
-            gp = grad_penalty(self.model, self.config.loss.alpha, self.device)
+            # loss.backward(retain_graph=True)
+            # gp = grad_penalty(self.model, self.config.loss.alpha, self.device)
             # like this?
             # gp.backward()
-            loss = loss + gp
+            # loss = loss + gp
             loss.backward()
 
             self.optimizer.step()

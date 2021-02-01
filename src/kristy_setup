@@ -1,7 +1,3 @@
-[Omniglot]
-CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/baseline.yaml --exp_id=omniglot_baseline --ni --classify --downstream
-
-
 ----
 [TOY GMM EXPERIMENTS]
 # toy flow
