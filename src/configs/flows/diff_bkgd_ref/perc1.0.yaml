@@ -8,24 +8,21 @@ training:
   data_dir: "/atlas/u/madeline/multi-fairgen/data/"
 
 data:
-  dataset: "DigitMNISTSubset"
-  perc: 0.1
-  biased_digits: [0, 7]
-  biased_digit_percs: [0.5, 0.5]
-  ref_digits: [1, 2]
-  ref_digit_percs: [0.5, 0.5]
+  dataset: "FlippedMNIST"
+  perc: 1.0
   image_size: 28
   channels: 1
   random_flip: false
   num_workers: 4
   flip_toy_var_order: true
-
+ 
 dre:
   alpha: 0
 
 sampling:
-  n_samples: 10000
+  n_samples: 1000
   n_sir: 1000
+  # sir: 1000
 
 model:
   name: "maf"

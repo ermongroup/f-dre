@@ -280,8 +280,8 @@ class Classifier(BaseTrainer):
                 best_epoch = epoch
                 best = True
                 self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
-                # if 'flow' in self.config.model.name:
-                #     self.flow_diagnostics(step=epoch, n_row=10)
+                if self.config.model.name == 'flow_mlp':
+                    self.flow_diagnostics(step=epoch, n_row=10)
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)

@@ -119,15 +119,6 @@ class MNISTSubset(VisionDataset):
                 transform=None, target_transform=None, load_in_mem=False,
                 download=True, **kwargs):
         super(MNISTSubset, self).__init__(config.training.data_dir)
-        # super(MNISTSubset, self).__init__(
-        #         args, 
-        #         config,
-        #         split=split,
-        #         flipped=flipped,
-        #         transform=transform, 
-        #         target_transform=target_transform, 
-        #         load_in_mem=load_in_mem,
-        #         download=download)
 
         self.args = args
         self.config = config
@@ -215,7 +206,7 @@ class MNISTSubset(VisionDataset):
             # for attr classification
             if self.args.attr == 'background':
                 label = int(self.flipped) # y_black_bkgd = 0, y_white_bkgd = 1
-            elif self.args.attr == 'digit':
+            elif self.args.attr == 'digit' or self.args.dre_x:
                 label = int(self.is_ref) # y = 1 if ref, 0 if biased
                 # label = self.labels[index]
             else:
@@ -227,10 +218,36 @@ class MNISTSubset(VisionDataset):
     def __len__(self):
         return len(self.data)
 
+class SplitMNIST(Dataset):
+    '''
+    Dataset that returns (ref_x, biased_x) when interated through via dataloader
+    (need to specify targets upon dataloading: y_ref = 1, y_biased = 0)
+
+    Note that this is in x-space!
+    '''
+
+    def __init__(self, ref, biased, split='train'):
+        self.config = config
+        # name of flow model used for encoding:
+        self.perc = config.data.perc
+        self.ref_dset = LoopingDataset(ref)
+        self.biased_dset = LoopingDataset(biased)
+    
+    def __getitem__(self, index):
+        ref_x, _ = self.ref_dset[index]
+        biased_x, _ = self.biased_dset[index]
+
+        return (ref_x, biased_x)
+    
+    def __len__(self):
+        return len(self.ref_dset) + len(self.biased_dset)
+
 class SplitEncodedMNIST(Dataset):
     '''
     Dataset that returns (ref_z, biased_z) when iterated through via dataloader
     (need to specify targets upon dataloading: y_ref = 1, y_biased = 0)
+
+    Note that this is in z-space!
     '''
     def __init__(self, config, split='train'):
         self.config = config

@@ -24,8 +24,8 @@ dre:
   alpha: 0
 
 sampling:
-  n_samples: 50000
-  n_sir: 100000
+  n_samples: 10000
+  n_sir: 1000
   # sir: 1000
 
 model:
