@@ -10,7 +10,8 @@ import datasets
 from .cmnist import (
     ourMNIST,
     MNISTSubset,
-    SplitEncodedMNIST
+    SplitEncodedMNIST,
+    SplitMNIST
 )
 from .toy import (
     Gaussian, 
@@ -132,6 +133,12 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
             test_loader2 = DataLoader(test_flipped, batch_size, shuffle=False, **kwargs)
 
             return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
+        elif args.tre:
+            # keep ref and biased separate in dataloading: (z_ref, z_biased)
+            train_dataset = SplitMNIST(train_mnist, train_flipped)
+            val_dataset = SplitMNIST(val_mnist, val_flipped, split='val')
+            test_dataset = SplitMNIST(test_mnist, test_flipped, split='test')
+
         else:
             # combine both
             train_dataset = ConcatDataset([train_mnist, train_flipped])

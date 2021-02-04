@@ -1,19 +1,18 @@
 training:
   batch_size: 128
-  n_epochs: 10
+  n_epochs: 5
   ngpu: 1
   iter_log: 1000
   iter_save: 100
   out_dir: "/atlas/u/madeline/multi-fairgen/src/classification/results"
   data_dir: "/atlas/u/madeline/multi-fairgen/data/"
-
+tre:
+  interp: "linear"
+  p: 1
+  m: 2
 data:
-  dataset: "DigitMNISTSubset"
-  perc: 1.0
-  biased_digits: [0, 7]
-  biased_digit_percs: [0.5, 0.5]
-  ref_digits: [1, 2]
-  ref_digit_percs: [0.5, 0.5]
+  dataset: "BackgroundMNIST"
+  perc: 0.1
   image_size: 28
   channels: 1
   random_flip: false

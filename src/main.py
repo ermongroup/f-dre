@@ -15,6 +15,7 @@ from flows.trainers.toy_flow import ToyFlow
 from classification.trainers.classifier import Classifier
 from classification.trainers.old_classifier import OldClassifier
 from classification.trainers.attr_classifier import AttrClassifier
+from classification.trainers.tre_trainer import TREClassifier
 from classification.trainers.mi_classifier import MIClassifier
 from classification.trainers.downstream_classifier import DownstreamClassifier
 from classification.trainers.omniglot_downstream_clf import OmniglotDownstreamClassifier
@@ -58,10 +59,10 @@ def parse_args_and_config():
     # ======== Classification-related (TODO: integrate classifier and flow into same main.py?) ========
     parser.add_argument('--classify', action='store_true', help='To run classification')
     parser.add_argument('--dre_x', action='store_true', help='DRE classification in x-space')
+    parser.add_argument('--tre', action='store_true', help='TRE method for DRE classification in x-space')
     parser.add_argument('--attr', default=None, help='For attr classification, provide one of \{\'background\', \'digit\'\}')
     parser.add_argument('--mi', action='store_true', help='To run MI estimation')
     parser.add_argument('--downstream', action='store_true', help='Run downstream classifier for domain adaptation experiment')
-    # parser.add_argument('--dre', action='store_true', help='Run DRE classification of z-encodings')  
     
     # parse args and config
     args = parser.parse_args()
@@ -176,9 +177,12 @@ def main():
 
     try:
         if args.classify:
-            if args.attr is not None or args.dre_x:
+            if args.tre:
+                trainer = TREClassifier(args, config)
+                print('training TRE classifier...')
+            elif args.attr is not None or args.dre_x:
                 trainer = AttrClassifier(args, config)
-                print('training attribute/standard (non-dre)/DRE classifier...')
+                print('training attribute/standard (non-dre) classifier...')
 
             else:
                 if args.mi:
@@ -207,7 +211,7 @@ def main():
             trainer.test()
         else:
             trainer.train()
-            if args.classify and config.data.dataset != 'Omniglot':
+            if args.classify and not args.tre and config.data.dataset != 'Omniglot':
                 # test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
                 # trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
                 test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')

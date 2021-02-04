@@ -11,7 +11,7 @@ import numpy as np
 from datasets.data import fetch_dataloaders
 
 import classification.utils as utils
-from classification.models.mlp import MLPClassifier
+from classification.models.mlp import MLPClassifier, MLPClassifierv2
 from classification.models.resnet import ResnetClassifier
 from classification.models.networks import *
 from classification.trainers.base import BaseTrainer
@@ -140,7 +140,7 @@ class AttrClassifier(BaseTrainer):
                 y = y[idx].to(self.device).float()
             else:
                 y = y[idx].to(self.device).long()
-            
+
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = self.model(z)
             loss = self.loss(logits.squeeze(), y.float())
@@ -301,6 +301,7 @@ class AttrClassifier(BaseTrainer):
         ratios = ratios.data.cpu().numpy()
         # ratios = (p_y1[:,1]/p_y1[:,0]).data.cpu().numpy()
         p_y1 = p_y1.data.cpu().numpy()
+        data = torch.cat(data).squeeze()
         data = data.data.cpu().numpy()
 
         return loss_meter.avg, acc_meter.avg, labels, p_y1, ratios, data

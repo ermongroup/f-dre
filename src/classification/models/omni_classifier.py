@@ -48,3 +48,28 @@ class Classifier(nn.Module):
         x = self.layer4(x)
         x = x.view(x.size()[0], -1)
         return x
+
+class TREClassifier(nn.Module):
+    def __init__(self, layer_size=64, num_channels=1, keep_prob=1.0, image_size=28):
+        super(TREClassifier, self).__init__()
+        
+        self.layer1 = convLayer(num_channels, layer_size, keep_prob)
+        self.layer2 = convLayer(layer_size, layer_size, keep_prob)
+        self.layer3 = convLayer(layer_size, layer_size, keep_prob)
+        self.layer4 = convLayer(layer_size, layer_size, keep_prob)
+
+        finalSize = int(math.floor(image_size / (2 * 2 * 2 * 2)))
+        self.outSize = finalSize * finalSize * layer_size
+
+    def forward(self, image_input):
+        """
+        Use CNN defined above
+        :param image_input:
+        :return:
+        """
+        x = self.layer1(image_input)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = x.view(x.size()[0], -1)
+        return x

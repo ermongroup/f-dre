@@ -227,9 +227,8 @@ class SplitMNIST(Dataset):
     '''
 
     def __init__(self, ref, biased, split='train'):
-        self.config = config
         # name of flow model used for encoding:
-        self.perc = config.data.perc
+        # self.perc = config.data.perc
         self.ref_dset = LoopingDataset(ref)
         self.biased_dset = LoopingDataset(biased)
     

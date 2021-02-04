@@ -14,7 +14,7 @@ from datasets.data import fetch_dataloaders
 from flows.models.maf import *
 from flows.models.ema import EMAHelper
 from classification.models.resnet import ResnetClassifier
-from classification.models.mlp import MLPClassifier, MLPClassifierv2
+from classification.models.mlp import MLPClassifier, MLPClassifierv2, TREMLPClassifier
 
 from flows.functions import get_optimizer
 from flows.functions.ckpt_util import get_ckpt_path
@@ -65,7 +65,7 @@ class Flow(object):
         
         # if necessary, load (pretrained) density ratio estimates
         if self.args.fair_generate:
-            self.dre_clf, name = self.load_classifier(args, self.args.dre_clf_ckpt)
+            self.dre_clf, name = self.load_classifier(args, self.args.dre_clf_ckpt, attr=False)
             self.dre_clf_name = name
         if self.args.sample and self.args.attr_clf_ckpt is not None:
             self.attr_clf, name = self.load_classifier(args, self.args.attr_clf_ckpt)
@@ -88,18 +88,28 @@ class Flow(object):
             raise ValueError('Unrecognized model.')
         return model
 
-    def load_classifier(self, args, ckpt_path):
+    def load_classifier(self, args, ckpt_path, attr=True):
         config_path = os.path.dirname(os.path.dirname(ckpt_path.rstrip('/')))
         with open(os.path.join(config_path, 'config.yaml')) as f:
             config = yaml.safe_load(f)
         config = dict2namespace(config)
 
-        if config.model.name == 'resnet':
-            clf = ResnetClassifier(args)
-        elif config.model.name == 'mlp':
-            clf = MLPClassifierv2(config)
+        if args.tre and not attr:
+            self.m = config.tre.m
+            self.p = config.tre.p
+            self.interp = config.tre.interp
+            if config.model.name == 'mlp':
+                clf = TREMLPClassifier(config)
+            else:
+                raise NotImplementedError(f'Classification model [{config.model.name}] not implemented.')
+
         else:
-            raise NotImplementedError(f'Classification model [{config.model.name}] not implemented.')
+            if config.model.name == 'resnet':
+                clf = ResnetClassifier(args)
+            elif config.model.name == 'mlp':
+                clf = MLPClassifierv2(config)
+            else:
+                raise NotImplementedError(f'Classification model [{config.model.name}] not implemented.')
             
         assert os.path.exists(ckpt_path)
         
@@ -108,6 +118,19 @@ class Flow(object):
         clf.load_state_dict(state_dict)
         clf = clf.to(self.device)
         return clf, config.model.name
+
+    def interpolate(self, d1, d2):
+        # d1 and d2 are batches of datasets
+        if self.interp == 'linear':
+            # the +1 is for [0, 1, ..., m]
+            a_k = torch.true_divide(torch.arange(self.m + 1), self.m) ** self.p
+            a_k = a_k.to(self.device)  # shapes
+            x_k = [torch.sqrt(1 - a ** 2) * d1 + (a * d2) for a in a_k]
+            x_k = torch.stack(x_k)
+        else:
+            raise NotImplementedError
+
+        return x_k  # (m+1, batch_size, x_dim)
 
     def train(self):
         args, config = self.args, self.config
@@ -431,14 +454,15 @@ class Flow(object):
                 print('on iter {}/{}'.format(n, n_sir))
             u = model.module.base_dist.sample((100, self.config.model.n_components)).squeeze().to(self.device)
 
-            if not self.args.dre_x:
-                logits, probas = self.dre_clf(u.view(100, 1, -1))
-                logits = logits.squeeze()
-
+            if not self.args.dre_x and not self.args.tre:
                 if self.dre_clf_name == 'mlp':
+                    logits, probas = self.dre_clf(u.view(100, 1, -1))
+                    logits = logits.squeeze()
                     log_ratios = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
                     ratios = torch.exp(log_ratios)
                 else:
+                    logits, probas = self.dre_clf(u.view(100, 1, 28, 28))
+                    logits = logits.squeeze()
                     ratios = (probas[:, 1]/probas[:, 0])
                 
                 ratios = self.get_mixture_ratios(ratios)
@@ -452,12 +476,14 @@ class Flow(object):
                 while torch.any(torch.isnan(samples)):
                     print('nans found! resampling...')
                     u = model.module.base_dist.sample((100, self.config.model.n_components)).squeeze().to(self.device)
-                    logits, probas = self.dre_clf(u.view(100, 1, -1))
-                    logits = logits.squeeze()
                     if self.dre_clf_name == 'mlp':
+                        logits, probas = self.dre_clf(u.view(100, 1, -1))
+                        logits = logits.squeeze()
                         log_ratios = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
                         ratios = torch.exp(log_ratios)
                     else:
+                        logits, probas = self.dre_clf(u.view(100, 1, 28, 28))
+                        logits = logits.squeeze()
                         ratios = (probas[:, 1]/probas[:, 0])
                     ratios = self.get_mixture_ratios(ratios)
                     if alpha > 0:
@@ -487,15 +513,39 @@ class Flow(object):
             samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
             samples = torch.sigmoid(samples)
             samples = torch.clamp(samples, 0., 1.)
-
-            if self.args.dre_x:
-                logits, probas = self.dre_clf(samples.view(100, 1, -1))
-                logits = logits.squeeze()
-
+            
+            if self.args.tre:
                 if self.dre_clf_name == 'mlp':
+                    # bridges = self.interpolate(samples)
+                    logits_list, probas = self.dre_clf(samples.view(100, 1, -1))
+                    ratios = []
+                    for logits in logits_list:
+                        logits = logits.squeeze()
+                        log_ratios = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
+                        ratios.append(torch.exp(log_ratios))
+                else:
+                    raise NotImplementedError
+                
+                # if alpha > 0:
+                #     ratios = ratios**(alpha)
+                # ratios = self.get_mixture_ratios(ratios)
+                # r_probs = ratios/ratios.sum()
+                ratios = torch.stack(ratios)
+                # print('ratios.shape: ', ratios.shape)
+                r_probs = torch.prod(ratios, axis=0)
+                sir_j = Categorical(r_probs).sample().item()
+                samples = samples[sir_j].unsqueeze(0)
+
+            elif self.args.dre_x:
+                if self.dre_clf_name == 'mlp':
+                    print('samples.shape: ', samples.shape)
+                    logits, probas = self.dre_clf(samples.view(100, 1, -1))
+                    logits = logits.squeeze()
                     log_ratios = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
                     ratios = torch.exp(log_ratios)
                 else:
+                    logits, probas = self.dre_clf(samples.view(100, 1, 28, 28))
+                    logits = logits.squeeze()
                     ratios = (probas[:, 1]/probas[:, 0])
                 if alpha > 0:
                     ratios = ratios**(alpha)
