@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/kmm/maf.yaml --exp_id=km_flow --ni

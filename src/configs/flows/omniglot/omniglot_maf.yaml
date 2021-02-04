@@ -2,29 +2,30 @@ training:
   batch_size: 100
   n_epochs: 200
   ngpu: 1
-  log_interval: 500
+  log_interval: 100
   iter_save: 100
-  exp_id: "mi_flow_rho0.9"
-  out_dir: "/atlas/u/kechoi/multi-fairgen/src/flows/results"
+  exp_id: "omniglot_maf"
+  out_dir: "/atlas/u/kechoi/multi-fairgen/src/flows/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
+sampling:
+  generate: true
+  fair: true
+  n_samples: 3000
+  encode: false
+
 data:
-  dataset: "MI_flow"
+  dataset: "Omniglot_Mixture"
   subset: false
+  perc: 0.1
+  image_size: 28
+  channels: 1
+  input_size: 784
+  random_flip: false
   x_space: false
-  perc: 1.0
-  mus: [0, 3]
-  input_size: 40
+  class_idx: 20
   num_workers: 4
   flip_toy_var_order: true
-  rho: 0.9
-
-dre:
-  alpha: 0.06
-
-sampling:
-  n_samples: 50000
-  # sir: 1000
 
 model:
   name: "maf"
@@ -32,15 +33,22 @@ model:
   n_classes: 2
   n_blocks: 5
   n_components: 1
-  input_size: 40
-  hidden_size: 100
-  n_hidden: 1
+  input_size: 784
+  hidden_size: 1024
+  n_hidden: 2
   activation_fn: 'relu'
   input_order: 'sequential'
   conditional: false
   no_batch_norm: false
-  cond_label_size: 1
+  cond_label_size: 10
   ema: false
+
+dre:
+  alpha: 0.06
+
+sampling:
+  n_samples: 50000
+  sir: 1000
 
 optim:
   weight_decay: 0.000001

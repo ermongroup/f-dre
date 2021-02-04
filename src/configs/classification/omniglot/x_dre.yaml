@@ -1,19 +1,18 @@
 training:
   batch_size: 32
-  n_epochs: 100
+  n_epochs: 20
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "omniglot_gen_baseline"
+  exp_id: "omniglot_x_dre_clf"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
 data:
-  dataset: "Omniglot"
+  dataset: "Omniglot_Mixture"
   subset: false
   x_space: true
   synthetic: true
-  augment: false
   input_size: 784
   image_size: 28
   channels: 1
@@ -23,7 +22,7 @@ data:
   num_workers: 4
 
 model:
-  name: "cnn"
+  name: "cnn_bce"
   baseline: true
   spectral_norm: true
   batch_norm: true
@@ -40,5 +39,5 @@ optim:
   amsgrad: false
 
 loss:
-  name: "cross_entropy"
+  name: "bce"
   alpha: 0.01

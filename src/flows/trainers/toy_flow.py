@@ -184,7 +184,7 @@ class ToyFlow(object):
                     'optimizer_state': optimizer.state_dict()},
                     os.path.join(args.out_dir, 'best_model_checkpoint.pt'))
                 # generate samples
-                self.plot_sample_and_density(self.args, model, test_dataloader.dataset, step=epoch)
+                # self.plot_sample_and_density(self.args, model, test_dataloader.dataset, step=epoch)
 
     @torch.no_grad()
     def test(self, model, dataloader, epoch, args):

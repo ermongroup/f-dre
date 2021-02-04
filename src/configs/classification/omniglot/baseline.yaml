@@ -13,6 +13,7 @@ data:
   subset: false
   x_space: true
   synthetic: false
+  augment: false
   input_size: 784
   image_size: 28
   channels: 1

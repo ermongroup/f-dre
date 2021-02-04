@@ -3,6 +3,19 @@ import torch
 import numpy as np
 
 
+def logit_transform(image, lam=1e-6):
+    image = lam + (1 - 2 * lam) * image
+    return torch.log(image) - torch.log1p(-image)
+
+
+def maf_preprocess(x):
+    x = (x * 255).byte()
+    # performs dequantization, rescaling, then logit transform
+    x = (x + torch.rand(x.size()).to(x.device)) / 256.
+    x = logit_transform(x)
+    return x
+
+
 def glow_preprocess(x):
     # Follows:
     # https://github.com/tensorflow/tensor2tensor/blob/e48cf23c505565fd63378286d9722a1632f4bef7/tensor2tensor/models/research/glow.py#L78

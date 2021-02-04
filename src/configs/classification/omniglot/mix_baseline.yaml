@@ -9,10 +9,11 @@ training:
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
 data:
-  dataset: "Omniglot_Mixture"
+  dataset: "Omniglot"
   subset: false
   x_space: true
   synthetic: true
+  augment: true
   input_size: 784
   image_size: 28
   channels: 1

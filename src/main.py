@@ -180,6 +180,7 @@ def main():
                 trainer = AttrClassifier(args, config)
             else:
                 if args.mi:
+                    print('training MI classifier...')
                     trainer = MIClassifier(args, config)
                 elif args.downstream:
                     print('Training downstream classifier...')
@@ -190,10 +191,10 @@ def main():
                         trainer = DownstreamClassifier(args, config)
                 else:
                     print('Using DRE classifier...')
-                    # trainer = Classifier(args, config)
-                    trainer = OldClassifier(args, config)
+                    trainer = Classifier(args, config)
+                    # trainer = OldClassifier(args, config)
         else:
-            if config.data.dataset not in ['GMM', 'GMM_flow', 'MI', 'MI_flow']:
+            if config.data.dataset not in ['KMM', 'GMM', 'GMM_flow', 'MI', 'MI_flow']:
                 trainer = Flow(args, config)
             else:
                 trainer = ToyFlow(args, config)
@@ -207,8 +208,8 @@ def main():
             if args.classify and config.data.dataset != 'Omniglot':
                 # test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
                 # trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
-                test_loss, test_acc, test_labels, test_probs, test_ratios = trainer.test(trainer.test_dataloader, 'test')
-                trainer.clf_diagnostics(test_labels, test_probs, test_ratios, 'test')
+                test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
+                trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
     
     except Exception:
         logging.error(traceback.format_exc())
@@ -218,26 +219,3 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
-
-# cut out of "elif args.test:" block:
-# if not args.classify:
-            #     trainer.test()  # NOTE: this doesn't work for classifier atm
-            # else:
-            #     # TODO: FIX THIS (this is the classifier!)
-            #     import torch.utils.data as data
-            #     from datasets import get_dataset
-            #     from models.classifier import build_model
-
-            #     _, test_dataset = get_dataset(args, config)
-            #     loader = data.DataLoader(
-            #         test_dataset,
-            #         batch_size=config.classifier.batch_size//2,
-            #         shuffle=False,
-            #         num_workers=config.data.num_workers,
-            #     )
-            #     model_cls = build_model(config.classifier.name)
-            #     model = model_cls(config).cuda()
-            #     model = torch.nn.DataParallel(model)
-            #     state_dict = torch.load(os.path.join(args.log_path, 'clf_ckpt.pth'))[0]
-            #     model.load_state_dict(state_dict)
-            #     trainer.test(model, loader)

@@ -15,7 +15,9 @@ from classification.models.cnn import CNNClassifier
 from classification.models.mlp import MLPClassifierv2
 from classification.models.resnet import ResnetClassifier
 from classification.models.networks import *
+from classification.models.cnn import *
 from classification.trainers.base import BaseTrainer
+from flows.models.maf import MAF
 from sklearn.calibration import calibration_curve
 
 import torch
@@ -57,12 +59,12 @@ class OmniglotDownstreamClassifier(BaseTrainer):
         if not self.config.model.baseline:
             if self.config.data.x_space:
                 print('using x-space classifier')
-                self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_x_dre_cifar/checkpoints/model_best.pth')
+                self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/omniglot_x_dre_clf/checkpoints/model_best.pth')
             else:
                 print('using z-space classifier')
                 # z-encoding
                 self.flow = self.load_flow()
-                self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_z_dre_cifar_v3/checkpoints/model_best.pth')
+                self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/omniglot_z_dre_clf/checkpoints/model_best.pth')
 
     def get_model(self):
         model = self.get_model_cls(self.config.model.name)
@@ -96,13 +98,10 @@ class OmniglotDownstreamClassifier(BaseTrainer):
 
         print('loading dre classifier')
         if self.config.data.x_space:
-            # model = MLPClassifier(self.config)
-            model = resnet20()
+            model = BinaryCNNClassifier()
         else:
-            model = MLPClassifierv2(self.config)
-            # model = resnet20()
-            # model = ResnetClassifier(self.args)
-            # model = FlowClassifier(self.config)
+            # model = MLPClassifierv2(self.config)
+            model = BinaryCNNClassifier()
         model = model.to(self.device)
 
         # load checkpoint
@@ -113,24 +112,19 @@ class OmniglotDownstreamClassifier(BaseTrainer):
         return model
 
     def load_flow(self):
-        raise NotImplementedError
-        # import json
-        # output_folder = '/atlas/u/kechoi/Glow-PyTorch/glow/'
-        # # model_name = 'glow_model_250.pth'
-        # model_name = 'glow_affine_coupling.pt'
-
-        # with open(output_folder + 'hparams.json') as json_file:  
-        #     hparams = json.load(json_file)
-        # image_shape = (32, 32, 3)  # HACK for CIFAR10
-        # num_classes = 10
-
-        # model = Glow(image_shape, hparams['hidden_channels'], hparams['K'], hparams['L'], hparams['actnorm_scale'], hparams['flow_permutation'], hparams['flow_coupling'], hparams['LU_decomposed'], num_classes, hparams['learn_top'], hparams['y_condition'])
-
-        # # load checkpoint
-        # model.load_state_dict(torch.load(output_folder + model_name))
-        # model.set_actnorm_init()
-        # model = model.to(self.config.device)
-        # return model
+        model = MAF(5, 
+                    784, 
+                    1024, 
+                    2, 
+                    None, 
+                    'relu', 
+                    'sequential', 
+                    batch_norm=True)
+        restore_file = 'flows/results/omniglot_maf/'
+        state = torch.load(os.path.join(restore_file, "best_model_checkpoint.pt"), map_location='cuda')
+        model.load_state_dict(state['model_state'])
+        model = model.to(self.config.device)
+        return model
 
     def get_loss(self):
         if self.config.loss.name == 'bce':
@@ -179,9 +173,9 @@ class OmniglotDownstreamClassifier(BaseTrainer):
 
             if self.args.encode_z:
                 self.flow.eval()
-                x_hat = utils.glow_preprocess(x)
+                x_hat = utils.maf_preprocess(x)
                 with torch.no_grad():
-                    z, _, _ = self.flow(x_hat)
+                    z, _ = self.flow(x_hat.view(len(x_hat), -1))
             else:
                 # no encoding
                 z = x
@@ -197,10 +191,10 @@ class OmniglotDownstreamClassifier(BaseTrainer):
 
             if not self.config.model.baseline:
                 # TODO: REWEIGHT THE LOSS
-                if not self.config.data.x_space:
-                    z = z.view(len(z), -1)
-                logits, probas = self.dre_clf(z)
-                log_r = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
+                # if not self.config.data.x_space:
+                #     z = z.view(len(z), -1)
+                dre_logits, dre_probas = self.dre_clf(z.view(len(z), 1, 28, 28))
+                log_r = utils.logsumexp_1p(-dre_logits) - utils.logsumexp_1p(dre_logits)
                 ratios = torch.exp(log_r)
                 # reweight density ratios to account for flow
                 # if not self.config.data.x_space:
@@ -352,8 +346,10 @@ class OmniglotDownstreamClassifier(BaseTrainer):
                     # do you need the reweighted loss here?
                     if not self.config.data.x_space:
                         # TODO: fix for z-space
-                        ratios = ratios
-                    loss = (ratios * loss).mean()
+                        # ratios = ratios
+                        ratios = None
+                    # loss = (ratios * loss).mean()
+                    loss = loss.mean()
                 else:
                     loss = loss.mean()
 

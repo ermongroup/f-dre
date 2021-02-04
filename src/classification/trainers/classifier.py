@@ -16,8 +16,9 @@ from classification.models.mlp import (
 from classification.models.flow_mlp import FlowClassifier
 from classification.models.resnet import ResnetClassifier
 from classification.models.networks import *
-# HACK: this is going to be really annoying to bake Glow into this
-from classification.models.glow import Glow
+from classification.models.cnn import *
+# from classification.models.glow import Glow
+from flows.models.maf import MAF
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
 from losses import joint_gen_disc_loss
@@ -58,9 +59,9 @@ class Classifier(BaseTrainer):
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
         # z-encoding
-        self.flow = self.load_glow()
         if self.args.encode_z:
             print('using flow to encode x into z-space...')
+            self.flow = self.load_flow()
 
     def get_model(self):
         model = self.get_model_cls(self.config.model.name)
@@ -76,6 +77,12 @@ class Classifier(BaseTrainer):
         elif name == 'resnet20':
             model_cls = resnet20()
             return model_cls
+        elif name == 'cnn':
+            model_cls = CNNClassifier()
+            return model_cls
+        elif name == 'cnn_bce':
+            model_cls = BinaryCNNClassifier()
+            return model_cls
         elif name == 'flow_mlp':
             print('Training flow + mlp...')
             model_cls = FlowClassifier
@@ -85,22 +92,18 @@ class Classifier(BaseTrainer):
 
         return model_cls(self.config)
 
-    def load_glow(self):
-        import json
-        output_folder = '/atlas/u/kechoi/Glow-PyTorch/glow/'
-        # model_name = 'glow_model_250.pth'
-        model_name = 'glow_affine_coupling.pt'
-
-        with open(output_folder + 'hparams.json') as json_file:  
-            hparams = json.load(json_file)
-        image_shape = (32, 32, 3)  # HACK for CIFAR10
-        num_classes = 10
-
-        model = Glow(image_shape, hparams['hidden_channels'], hparams['K'], hparams['L'], hparams['actnorm_scale'], hparams['flow_permutation'], hparams['flow_coupling'], hparams['LU_decomposed'], num_classes, hparams['learn_top'], hparams['y_condition'])
-
-        # load checkpoint
-        model.load_state_dict(torch.load(output_folder + model_name))
-        model.set_actnorm_init()
+    def load_flow(self):
+        model = MAF(5, 
+                    784, 
+                    1024, 
+                    2, 
+                    None, 
+                    'relu', 
+                    'sequential', 
+                    batch_norm=True)
+        restore_file = 'flows/results/omniglot_maf/'
+        state = torch.load(os.path.join(restore_file, "best_model_checkpoint.pt"), map_location='cuda')
+        model.load_state_dict(state['model_state'])
         model = model.to(self.config.device)
         return model
 
@@ -179,9 +182,10 @@ class Classifier(BaseTrainer):
 
             if self.args.encode_z:
                 # TODO: preprocessing before glow
-                z = utils.glow_preprocess(z)
+                # z = utils.glow_preprocess(z)
+                z = utils.maf_preprocess(z)
                 with torch.no_grad():
-                    z, _, _ = self.flow(z)
+                    z, _ = self.flow(z.view(len(z), -1))
 
             # random permutation of data
             if 'mlp' in self.config.model.name:
@@ -331,9 +335,8 @@ class Classifier(BaseTrainer):
 
                 # TODO: ENCODE WITH FLOW!!!! (REFER TO TRAIN)
                 if self.args.encode_z:
-                    # TODO: preprocessing before glow
-                    z = utils.glow_preprocess(z)
-                    z, _, _ = self.flow(z)
+                    z = utils.maf_preprocess(z)
+                    z, _ = self.flow(z.view(len(z), -1))
                 
                 if 'mlp' in self.config.model.name:
                     z = z.view(len(z), -1)

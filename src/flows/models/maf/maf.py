@@ -187,6 +187,7 @@ class MAF(nn.Module):
         u, sum_log_abs_det_jacobians = self.forward(x, y)
         return torch.sum(self.base_dist.log_prob(u) + sum_log_abs_det_jacobians, dim=1)
 
+
 class MAFMOG(nn.Module):
     """ MAF on mixture of gaussian MADE """
     def __init__(self, n_blocks, n_components, input_size, hidden_size, n_hidden, cond_label_size=None, activation='relu',

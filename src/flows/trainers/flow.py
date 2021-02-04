@@ -199,8 +199,16 @@ class Flow(object):
 
         # unconditional model
         for data in dataloader:
-            x = data[0].view(data[0].shape[0], -1).to(self.device)
-            logprobs.append(model.module.log_prob(x))
+            # x = data[0].view(data[0].shape[0], -1).to(self.device)
+            # check if labeled dataset
+            if len(data) == 1:
+                x, y = data[0], None
+            else:
+                x, y = data
+                y = y.to(self.device)
+            x = x.to(self.device).view(x.shape[0], -1)
+            log_px = model.module.log_prob(x)
+            logprobs.append(log_px)
         logprobs = torch.cat(logprobs, dim=0).to(self.device)
 
         logprob_mean, logprob_std = logprobs.mean(0), 2 * logprobs.var(0).sqrt() / math.sqrt(len(dataloader.dataset))
@@ -248,8 +256,13 @@ class Flow(object):
 
         u = model.module.base_dist.sample((n_row**2, self.config.model.n_components)).squeeze()
         samples, _ = model.module.inverse(u)
-        log_probs = model.module.log_prob(samples).sort(0)[1].flip(0)
-        samples = samples[log_probs]
+        try:
+            log_probs = model.module.log_prob(samples).sort(0)[1].flip(0)
+            samples = samples[log_probs]
+        except:
+            import pdb
+            pdb.set_trace()
+            # i think something is breaking here
 
         # convert and save images
         samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))

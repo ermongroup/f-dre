@@ -4,16 +4,16 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "omniglot_gen_baseline"
+  exp_id: "omniglot_method_z"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
 data:
   dataset: "Omniglot"
   subset: false
-  x_space: true
+  x_space: false
   synthetic: true
-  augment: false
+  augment: true
   input_size: 784
   image_size: 28
   channels: 1
@@ -24,7 +24,7 @@ data:
 
 model:
   name: "cnn"
-  baseline: true
+  baseline: false
   spectral_norm: true
   batch_norm: true
   in_dim: 784

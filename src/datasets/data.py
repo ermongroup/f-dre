@@ -30,8 +30,10 @@ from .cifar10 import (
     DADRESplitCIFAR10
 )
 from .omniglot import (
-    Omniglot
+    Omniglot,
+    OmniglotMixture
 )
+from .kmm import KMM
 
 # --------------------
 # Helper functions
@@ -226,6 +228,15 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         val_dataset = SplitEncodedMNIST(config, split='val')
         test_dataset = SplitEncodedMNIST(config, split='test')
 
+    elif dataset_name == 'KMM':
+        input_dims = 2
+        label_size = 1
+        lam = 1e-6
+
+        train_dataset = KMM(config, split='train')
+        val_dataset = KMM(config, split='train')  # not used for anything
+        test_dataset = KMM(config, split='test')
+
     elif dataset_name in ['GMM_flow']:
         input_dims = 2
         label_size = 1
@@ -330,12 +341,27 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         test_dataset = ConcatDataset([test_biased, test_ref])
 
     elif dataset_name == 'Omniglot_Mixture':
-        return NotImplementedError
+        input_dims = config.data.input_size
+        label_size = 1622
+        lam = 1e-6
+
+        if config.model.name != 'maf':  # classifier
+            train_dataset = OmniglotMixture(config.training.data_dir, config, split='train', transform=None)
+            val_dataset = OmniglotMixture(config.training.data_dir, config, split='val', transform=None)
+            test_dataset = OmniglotMixture(config.training.data_dir, config, split='test', transform=None)
+        else:
+            # this is specifically for training the flow!
+            train_dataset = OmniglotMixture(config.training.data_dir, config, split='train', transform=None)
+            val_dataset = OmniglotMixture(config.training.data_dir, config, split='val', transform=None)
+            test_dataset = OmniglotMixture(config.training.data_dir, config, split='test', transform=None)
+
+            train_dataset = ConcatDataset([train_dataset.ref_dataset, train_dataset.bias_dataset])
+            val_dataset = ConcatDataset([val_dataset.ref_dataset, val_dataset.bias_dataset])
+            test_dataset = ConcatDataset([test_dataset.ref_dataset, test_dataset.bias_dataset])
 
     elif dataset_name == 'Omniglot':
         if config.data.synthetic:
             print('running classifier on synthetic examples only...')
-
         input_dims = config.data.input_size
         label_size = 1622
         lam = 1e-6
