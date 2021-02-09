@@ -299,7 +299,7 @@ class Flow(object):
         samples = samples[log_probs]
 
         # convert and save images
-	samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
+        samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
         samples = torch.sigmoid(samples)
         samples = torch.clamp(samples, 0., 1.)
         filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'

@@ -4,7 +4,7 @@ training:
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "omniglot_mix_baseline"
+  exp_id: "omniglot_mix_baseline_aug5"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 

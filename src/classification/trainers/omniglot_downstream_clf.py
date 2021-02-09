@@ -199,7 +199,11 @@ class OmniglotDownstreamClassifier(BaseTrainer):
                 # reweight density ratios to account for flow
                 # if not self.config.data.x_space:
                 #     ratios = ratios/(0.6 * ratios + 0.4)
-                loss = (ratios * loss).mean()
+
+                # what if we self-normalize?
+                ratios = ratios/sum(ratios)
+                loss = (ratios * loss).sum()
+                # loss = (ratios * loss).mean()
             else:
                 loss = loss.mean()
             loss_meter.update(loss.item())

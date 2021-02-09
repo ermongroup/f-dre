@@ -10,8 +10,7 @@ import datasets
 from .cmnist import (
     ourMNIST,
     MNISTSubset,
-    SplitEncodedMNIST,
-    SplitMNIST
+    SplitEncodedMNIST
 )
 from .toy import (
     Gaussian, 
@@ -85,19 +84,7 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         train_dataset = ourMNIST(args, config, split='train')
         val_dataset = ourMNIST(args, config, split='val')
         test_dataset = ourMNIST(args, config, split='test')
-
-    elif dataset_name in ['FlippedMNIST']:
-        '''
-        MNIST with flipped background
-        '''
-        input_dims = 784
-        label_size = 10
-        lam = 1e-6
-
-        train_dataset = ourMNIST(args, config, split='train', flipped=True)
-        val_dataset = ourMNIST(args, config, split='val', flipped=True)
-        test_dataset = ourMNIST(args, config, split='test', flipped=True)
-
+        
     elif dataset_name in ['BackgroundMNIST']:
         '''
         MNIST with black and white backgrounds
@@ -133,34 +120,15 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
             test_loader2 = DataLoader(test_flipped, batch_size, shuffle=False, **kwargs)
 
             return [train_loader, train_loader2], [val_loader, val_loader2], [test_loader, test_loader2]
-        elif args.tre:
-            # keep ref and biased separate in dataloading: (z_ref, z_biased)
-            train_dataset = SplitMNIST(train_mnist, train_flipped)
-            val_dataset = SplitMNIST(val_mnist, val_flipped, split='val')
-            test_dataset = SplitMNIST(test_mnist, test_flipped, split='test')
-
         else:
             # combine both
             train_dataset = ConcatDataset([train_mnist, train_flipped])
             val_dataset = ConcatDataset([val_mnist, val_flipped])
             test_dataset = ConcatDataset([test_mnist, test_flipped])
 
-    elif dataset_name in ['MNISTSubset']:
-        '''
-        MNIST with subset of digits
-        '''
-        input_dims = 784
-        label_size = 10
-        lam = 1e-6
-
-        train_dataset = MNISTSubset(args, config, split='train')
-        val_dataset = MNISTSubset(args, config, split='val')
-        test_dataset = MNISTSubset(args, config, split='test')
-
-
     elif dataset_name in ['BackgroundMNISTSubset']:
         '''
-        Subset of MNIST digits with black and white backgrounds; diff digits
+        Subset of MNIST digits with black and white backgrounds; same digits
         '''
         input_dims = 784
         label_size = 10
@@ -251,7 +219,6 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         train_dataset = ConcatDataset([train_biased, train_ref])
         val_dataset = ConcatDataset([val_biased, val_ref])
         test_dataset = ConcatDataset([test_biased, test_ref])
-
     elif dataset_name in ['SplitEncodedMNIST']:
         input_dims = 784
         label_size = 1
@@ -374,6 +341,7 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         test_dataset = ConcatDataset([test_biased, test_ref])
 
     elif dataset_name == 'Omniglot_Mixture':
+        print('Using Omniglot_Mixture dataset')
         input_dims = config.data.input_size
         label_size = 1622
         lam = 1e-6

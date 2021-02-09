@@ -94,6 +94,8 @@ class TRECNNClassifier(nn.Module):
         probas = F.softmax(logits, dim=-1)
 
         return logits, probas
+
+
 class BinaryCNNClassifier(nn.Module):
     def __init__(self, layer_size=64, num_channels=1, keep_prob=1.0, image_size=28):
         super(BinaryCNNClassifier, self).__init__()

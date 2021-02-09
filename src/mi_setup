@@ -1,3 +1,4 @@
+(MOST RECENT FOR UAI!!!)
 ----------
 [MUTUAL INFORMATION EXPERIMENTS]
 1. (JOINT BASELINE) ---- # 3
@@ -31,7 +32,7 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/mlp
 
 
 ------
-(2/2/21) # can we do this for dim=40??
+(2/8/21) # can we do this for dim=40??
 (X BASELINE)
 CUDA_VISIBLE_DEVICES=1 python3 main.py --classify --config classification/mi/mi_test.yaml  --exp_id mi_d40_rho0.9 --ni --mi
 
@@ -43,11 +44,26 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/dis
 (JOINT TRAINING) (rho=0.9)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_test.yaml  --exp_id mi_flow_mlp_alpha0.9_rho0.9 --ni --mi
 
-CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_test.yaml  --exp_id mi_flow_mlp_alpha0.1_rho0.9 --ni --mi
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_flow_d40_a0.1.yaml  --exp_id mi_flow_mlp_alpha0.1_rho0.9 --ni --mi
+
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/joint_flow_d40_a0.5.yaml  --exp_id mi_flow_mlp_alpha0.5_rho0.9 --ni --mi
 
 
-(can u train the flow?)
+(SEPARATE TRAINING)
+(only flow)
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/mi/perc1.0.yaml --exp_id=mi_flow_rho0.9 --ni
+
+(encode)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config flows/mi/perc1.0.yaml --exp_id encode_mi_perc1.0 --restore_file=/atlas/u/kechoi/multi-fairgen/src/flows/results/mi_flow_rho0.9/ --sample --encode_z --ni
+
+# need to change MI_flow -> MI in data encodings path
+(old encodings are in MI_rho0.95)
+
+(classify)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --classify --config classification/mi/mlp_z_perc1.0.yaml  --exp_id mi_z_rho0.9 --ni --mi
+
+
+(TRE baseline)
 
 
 

@@ -37,7 +37,8 @@ class OmniglotMixture(VisionDataset):
         ref_data = np.load('/atlas/u/kechoi/DAGAN/datasets/omniglot_data.npy')
         # tensorflow samples
         bias_data = np.load('/atlas/u/kechoi/DAGAN/datasets/generated_omniglot/generated_omniglot.npy').reshape(1622, 100, 28, 28, 1)
-        bias_data = bias_data[0:1200, :, :, :, :]
+        # bias_data = bias_data[0:1200, :, :, :, :]
+        # TODO: commented this out so that I'm augmenting across all classes
         bias_data = bias_data / 255.
         # TODO: will have to experiment with train/val/test splits
         # TODO: maybe a "perc" argument can be used here
@@ -48,12 +49,13 @@ class OmniglotMixture(VisionDataset):
         if self.split == 'train':
             ref = ref_data[:, 0:15, :, :, :]
             bias = bias_data[:, 0:15, :, :, :]
+            # bias = bias_data[:, 0:5, :, :, :]
         elif self.split == 'val':
-            ref = ref_data[:, 15:17, :, :, :]
-            bias = bias_data[:, 15:17, :, :, :]
+            ref = ref_data[:, 15:18, :, :, :]
+            bias = bias_data[:, 15:18, :, :, :]
         else:
-            ref = ref_data[:, 17:, :, :, :]
-            bias = bias_data[:, 17:, :, :, :]
+            ref = ref_data[:, 18:, :, :, :]
+            bias = bias_data[:, 18:, :, :, :]
 
         # reshape bc numpy 
         bias = bias.reshape(-1, 28, 28, 1)
@@ -133,19 +135,20 @@ class Omniglot(VisionDataset):
             data = data / 255.
             true_data = np.load('/atlas/u/kechoi/DAGAN/datasets/omniglot_data.npy')[0:1200, :, :, :, :]
         if self.split == 'train':
-            data = data[:, 0:15, :, :, :]
-            n_labels = 15
+            # data = data[:, 0:15, :, :, :]
+            data = data[:, 0:5, :, :, :]
+            n_labels = 5
             if self.augment:
                 real = true_data[:, 0:15, :, :, :]
                 data = np.hstack([data, real])
-                n_labels = 30
+                n_labels = 20
             labels = np.repeat(np.arange(len(data)), n_labels)
         elif self.split == 'val':
-            data = true_data[:, 15:17, :, :, :]
-            labels = np.repeat(np.arange(len(data)), 2)
-        else:
-            data = true_data[:, 17:, :, :, :]
+            data = true_data[:, 15:18, :, :, :]
             labels = np.repeat(np.arange(len(data)), 3)
+        else:
+            data = true_data[:, 18:, :, :, :]
+            labels = np.repeat(np.arange(len(data)), 2)
         data = data.reshape(-1, 28, 28, 1)
         self.dataset = torch.from_numpy(data).permute((0, 3, 1, 2)).float()
         self.labels = torch.from_numpy(labels).float()

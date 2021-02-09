@@ -164,7 +164,6 @@ class Classifier(BaseTrainer):
 
         # train classifier
         self.model.train()
-        self.flow.eval()
         data_tqdm = tqdm(iter(self.train_dataloader), leave=False, total=len(self.train_dataloader))
 
         num_pos_correct = 0
@@ -181,6 +180,7 @@ class Classifier(BaseTrainer):
             y = y[idx].to(self.device).long()
 
             if self.args.encode_z:
+                self.flow.eval()
                 # TODO: preprocessing before glow
                 # z = utils.glow_preprocess(z)
                 z = utils.maf_preprocess(z)
@@ -280,8 +280,8 @@ class Classifier(BaseTrainer):
                 best_epoch = epoch
                 best = True
                 self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
-                if self.config.model.name == 'flow_mlp':
-                    self.flow_diagnostics(step=epoch, n_row=10)
+                # if 'flow' in self.config.model.name:
+                #     self.flow_diagnostics(step=epoch, n_row=10)
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)
@@ -322,7 +322,6 @@ class Classifier(BaseTrainer):
 
         with torch.no_grad():
             self.model.eval()
-            self.flow.eval()
 
             # test classifier
             t = tqdm(iter(loader), leave=False, total=len(loader))
@@ -335,6 +334,7 @@ class Classifier(BaseTrainer):
 
                 # TODO: ENCODE WITH FLOW!!!! (REFER TO TRAIN)
                 if self.args.encode_z:
+                    self.flow.eval()
                     z = utils.maf_preprocess(z)
                     z, _ = self.flow(z.view(len(z), -1))
                 

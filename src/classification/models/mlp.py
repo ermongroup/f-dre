@@ -28,6 +28,7 @@ class MLPClassifierv2(nn.Module):
 
     return logits, probas
 
+
 class TREMLPClassifier(nn.Module):
   def __init__(self, config):
     super(TREMLPClassifier, self).__init__()
@@ -76,6 +77,7 @@ class TREMLPClassifier(nn.Module):
     probas = torch.sigmoid(logits)
 
     return logits, probas
+
 
 class MLPClassifier(nn.Module):
   """

@@ -2,13 +2,19 @@
 1. (baseline data in x-space) --> 79.8% on test
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/baseline.yaml --exp_id=omniglot_baseline --ni --classify --downstream
 
-
-2. (baseline generated samples in x-space) --> 65.3% on test
+---
+2. (baseline generated samples in x-space) --> 65.3% on test (15 augmented)
 CUDA_VISIBLE_DEVICES=1 python3 main.py --config classification/omniglot/gen_baseline.yaml --exp_id=omniglot_gen_baseline --ni --classify --downstream
 
+(baseline generated samples in x-space) --> 62.4% on test (5 augmented) CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/gen_baseline.yaml --exp_id=omniglot_gen_baseline_aug5 --ni --classify --downstream
 
-3. (baseline data augmentation: data + samples) -> 91.2%
+
+---
+3. (baseline data augmentation: data + samples) -> 91.2% (aug 15)
 CUDA_VISIBLE_DEVICES=1 python3 main.py --config classification/omniglot/mix_baseline.yaml --exp_id=omniglot_mix_baseline --ni --classify --downstream
+
+(baseline data augmentation: data + samples) -> 86.4% (aug 5)
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/mix_baseline.yaml --exp_id=omniglot_mix_baseline_aug5 --ni --classify --downstream
 
 
 
@@ -31,12 +37,15 @@ CUDA_VISIBLE_DEVICES=1 python3 main.py --config classification/omniglot/mix_base
 
 
 5. (x-space dre with samples + data)
-(a) train dre classifier
+(a) train dre classifier (this is trained on all classes, not just train classes) -> 66.6% accuracy
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/x_dre.yaml --exp_id=omniglot_x_dre_clf --ni --classify
 
 
 (b) train downstream classifier (x-space dre) -> 85.7% on test
 CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/x_method.yaml --exp_id=omniglot_method_x --ni --classify --downstream
+
+(b) train downstream classifier (x-space dre) -> (5 aug) 84.1% on test
+CUDA_VISIBLE_DEVICES=0 python3 main.py --config classification/omniglot/x_method.yaml --exp_id=omniglot_method_x_aug5 --ni --classify --downstream
 
 
 

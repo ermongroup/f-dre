@@ -203,6 +203,7 @@ def main():
             if config.data.dataset not in ['KMM', 'GMM', 'GMM_flow', 'MI', 'MI_flow']:
                 trainer = Flow(args, config)
             else:
+                print('Using toy flow...')
                 trainer = ToyFlow(args, config)
         
         if args.sample:

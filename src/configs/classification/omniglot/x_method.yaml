@@ -1,10 +1,10 @@
 training:
   batch_size: 32
-  n_epochs: 100
+  n_epochs: 200
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "omniglot_method_x"
+  exp_id: "omniglot_method_x_aug5"
   out_dir: "/atlas/u/kechoi/multi-fairgen/src/classification/results/"
   data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
 
