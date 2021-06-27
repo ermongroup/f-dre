@@ -1,9 +1,0 @@
-results/
-__pycache__/
-datasets/__pycache__/
-data
-*.pyc
-run/
-src/classification/checkpoints
-old_results/
-wandb/
