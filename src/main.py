@@ -20,10 +20,6 @@ from classification.trainers.omniglot_downstream_clf import OmniglotDownstreamCl
 import getpass
 import wandb
 
-WANDB = {
-    'kechoi': 'kristychoi',
-}
-
 torch.set_printoptions(sci_mode=False)
 
 
@@ -84,7 +80,7 @@ def parse_args_and_config():
         # only for training
         wandb.init(
             project='f-dre',
-            entity=WANDB[getpass.getuser()], 
+            entity=getpass.getuser(),
             name=args.exp_id, 
             config=new_config, 
             sync_tensorboard=False,

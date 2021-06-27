@@ -10,7 +10,6 @@ from datasets.data import fetch_dataloaders
 
 import classification.utils as utils
 from classification.models.cnn import CNNClassifier
-from classification.models.mlp import MLPClassifierv2
 from classification.models.resnet import ResnetClassifier
 from classification.models.networks import *
 from classification.models.cnn import *
@@ -55,17 +54,17 @@ class OmniglotDownstreamClassifier(BaseTrainer):
         if not self.config.model.baseline:
             if self.config.data.x_space:
                 print('using x-space classifier')
-                ckpt_path = '/atlas/u/kechoi/f-dre/src/classification/results/omniglot_x_dre_clf/checkpoints/model_best.pth'
+                ckpt_path = './classification/results/omniglot_x_dre_clf/checkpoints/model_best.pth'
                 print('loading {}'.format(ckpt_path))
                 self.dre_clf = self.load_classifier(ckpt_path)
             else:
                 print('using z-space classifier')
                 # z-encoding
                 self.flow = self.load_flow()
-                self.dre_clf = self.load_classifier('/atlas/u/kechoi/f-dre/src/classification/results/omniglot_z_dre_clf/checkpoints/model_best.pth')
+                self.dre_clf = self.load_classifier('./classification/results/omniglot_z_dre_clf/checkpoints/model_best.pth')
 
     def restore_checkpoint(self):
-        clf_path = os.path.join('/atlas/u/kechoi/f-dre/src/classification/results/', self.args.exp_id, 'checkpoints', 'model_best.pth')
+        clf_path = os.path.join('./classification/results/', self.args.exp_id, 'checkpoints', 'model_best.pth')
         print('loading clf from {}'.format(clf_path))
         state = torch.load(clf_path)
         self.model.load_state_dict(state['state_dict'])
@@ -103,7 +102,6 @@ class OmniglotDownstreamClassifier(BaseTrainer):
         if self.config.data.x_space:
             model = BinaryCNNClassifier()
         else:
-            # model = MLPClassifierv2(self.config)
             model = BinaryCNNClassifier()
         model = model.to(self.device)
 

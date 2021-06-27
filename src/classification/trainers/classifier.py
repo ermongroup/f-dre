@@ -1,8 +1,6 @@
 import os
 import sys
 
-import copy
-import logging
 from pprint import pprint
 from tqdm import tqdm
 import numpy as np
@@ -23,11 +21,7 @@ from losses import joint_gen_disc_loss
 
 import torch
 import torch.optim as optim
-import torch.nn as nn
 import torch.nn.functional as F
-
-import torchvision
-from torchvision import datasets, transforms
 import torch.utils.data as data_utils
 
 import matplotlib
@@ -94,8 +88,6 @@ class Classifier(BaseTrainer):
                     'relu', 
                     'sequential', 
                     batch_norm=True)
-        # TODO: it was 50aug_v2 before, but i changed it back to 100aug
-        # restore_file = 'flows/results/omniglot_maf_50aug_v2/'
         restore_file = 'flows/results/omniglot_maf_100aug/'
         state = torch.load(os.path.join(restore_file, "best_model_checkpoint.pt"), map_location='cuda')
         model.load_state_dict(state['model_state'])
