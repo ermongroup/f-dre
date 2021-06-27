@@ -1,43 +1,39 @@
 training:
-  batch_size: 32
-  n_epochs: 20
+  batch_size: 128
+  n_epochs: 200
   ngpu: 1
   iter_log: 1000
   iter_save: 100
-  exp_id: "omniglot_z_dre_clf"
+  exp_id: "mi_z"
   out_dir: "/path/to/f-dre/src/classification/results/"
   data_dir: "/path/to/f-dre/data/"
 
 data:
-  dataset: "Omniglot_Mixture"
+  dataset: "MI"
   subset: false
   x_space: false
-  synthetic: true
-  input_size: 784
-  image_size: 28
-  channels: 1
+  input_size: 40
   perc: 1.0
   mus: [0, 3]
   class_idx: 20
   num_workers: 4
+  rho: 0.9
 
 model:
-  name: "cnn_bce"
-  baseline: true
+  name: "mlp"
   spectral_norm: true
   batch_norm: true
-  in_dim: 784
+  in_dim: 40
   h_dim: 200
   dropout: 0.1
   n_classes: 1
 
 optim:
-  weight_decay: 0.000
+  weight_decay: 0.0005
   optimizer: "Adam"
-  lr: 0.001
+  lr: 0.0002
   beta1: 0.9
   amsgrad: false
 
 loss:
   name: "bce"
-  alpha: 0.01

@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import math
 
 import copy
 import logging
@@ -218,6 +219,7 @@ class Flow(object):
             # save best state
             if eval_logprob > best_eval_logprob:
                 best_eval_logprob = eval_logprob
+                print('saving model at epoch {}'.format(epoch))
                 torch.save({
                     'epoch': epoch,
                     'model_state': model.module.state_dict(),

@@ -6,6 +6,7 @@ import torch.nn.functional as F
 class MLPClassifierv2(nn.Module):
   """
   simple MLP classifier (e.g. for classifying in z-space)
+  slightly deeper than MLPClassifier
   """
   def __init__(self, config):
       super(MLPClassifierv2, self).__init__()

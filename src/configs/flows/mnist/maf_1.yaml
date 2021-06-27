@@ -5,8 +5,8 @@ training:
   log_interval: 100
   iter_save: 100
   exp_id: "mnist_perc0.25"
-  out_dir: "/atlas/u/kechoi/multi-fairgen/src/flows/results/"
-  data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
+  out_dir: "/path/to/multi-fairgen/src/flows/results/"
+  data_dir: "/path/to/multi-fairgen/data/"
 
 sampling:
   generate: true

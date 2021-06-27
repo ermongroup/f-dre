@@ -5,8 +5,8 @@ training:
   log_interval: 500
   iter_save: 100
   exp_id: "kmm_flow"
-  out_dir: "/atlas/u/kechoi/multi-fairgen/src/flows/results"
-  data_dir: "/atlas/u/kechoi/multi-fairgen/data/"
+  out_dir: "/path/to/multi-fairgen/src/flows/results"
+  data_dir: "/path/to/multi-fairgen/data/"
 
 data:
   dataset: "KMM"

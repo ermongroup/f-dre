@@ -12,7 +12,6 @@ from datasets.data import fetch_dataloaders
 
 import classification.utils as utils
 from classification.models.mlp import MLPClassifierv2
-from classification.models.resnet import ResnetClassifier
 from classification.models.networks import *
 from classification.models.glow import Glow
 from classification.trainers.base import BaseTrainer
@@ -56,14 +55,17 @@ class DownstreamClassifier(BaseTrainer):
         # HACK FOR CIFAR10
         if self.config.data.x_space:
             print('using x-space classifier')
+            self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/hat_celeba_dre_x/checkpoints/model_best.pth')
             # self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_x_dre_cifar/checkpoints/model_best.pth')
-            self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_x_dre_cifar_extreme/checkpoints/model_best.pth')
+            # older
+            # self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_x_dre_cifar_extreme/checkpoints/model_best.pth')
         else:
             print('using z-space classifier')
             # z-encoding
             self.flow = self.load_glow()
-            # self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_z_dre_cifar_v3/checkpoints/model_best.pth')
-            self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_z_dre_cifar_extreme/checkpoints/model_best.pth')
+            self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_z_dre_cifar_v3/checkpoints/model_best.pth')
+            # older
+            # self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/da_z_dre_cifar_extreme/checkpoints/model_best.pth')
 
     def get_model(self):
         model = self.get_model_cls(self.config.model.name)
@@ -74,12 +76,6 @@ class DownstreamClassifier(BaseTrainer):
     def get_model_cls(self, name):
         if name == 'mlp':
             model_cls = MLPClassifier
-        elif name == 'resnet':
-            model_cls = ResnetClassifier
-            # model_cls = Resnet_v2
-        elif name == 'resnet20':
-            model_cls = resnet20()
-            return model_cls
         else:
             print('Model {} not found!'.format(name))
             raise NotImplementedError
@@ -94,8 +90,9 @@ class DownstreamClassifier(BaseTrainer):
 
         print('loading dre classifier')
         if self.config.data.x_space:
-            # model = MLPClassifier(self.config)
-            model = resnet20()
+            model = MLPClassifierv2(self.config)
+            # model = resnet20()
+            # model = resnet18()
         else:
             model = MLPClassifierv2(self.config)
             # model = resnet20()
@@ -197,9 +194,11 @@ class DownstreamClassifier(BaseTrainer):
             logits, probas = self.dre_clf(z)
             log_r = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
             ratios = torch.exp(log_r)
+            # these are very extreme!
+            ratios = (ratios)**0.2
             # reweight density ratios to account for flow
             # if not self.config.data.x_space:
-            #     ratios = ratios/(0.6 * ratios + 0.4)
+                # ratios = ratios/(0.6 * ratios + 0.4)
             loss = (ratios * loss).mean()
             loss_meter.update(loss.item())
 
@@ -262,9 +261,9 @@ class DownstreamClassifier(BaseTrainer):
         for epoch in range(1, self.config.training.n_epochs+1):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
-            val_loss, val_acc, val_labels, val_probs, val_ratios = self.test(self.val_dataloader, 'val')
+            val_loss, val_acc, val_labels, val_probs, val_ratios = self.test('val')
             # evaluate on test
-            test_loss, test_acc, test_labels, test_probs, test_ratios = self.test(self.test_dataloader, 'test')
+            test_loss, test_acc, test_labels, test_probs, test_ratios = self.test('test')
             scheduler.step()
             
             # check performance on validation set
@@ -286,7 +285,7 @@ class DownstreamClassifier(BaseTrainer):
             tr_acc_db[epoch - 1] = tr_acc
             test_acc_db[epoch - 1] = val_acc
         # evaluate on test
-        test_loss, test_acc, test_labels, test_probs, test_ratios = self.test(self.test_dataloader, 'test')
+        test_loss, test_acc, test_labels, test_probs, test_ratios = self.test('test')
         
         # TODO: save metrics
         self.plot_train_test_curves(tr_loss_db, test_loss_db)
@@ -299,7 +298,11 @@ class DownstreamClassifier(BaseTrainer):
         np.save(os.path.join(self.output_dir, 'tr_acc.npy'), tr_acc_db)
         np.save(os.path.join(self.output_dir, 'val_acc.npy'), test_acc_db)
 
-    def test(self, loader, test_type):
+    def test(self, test_type):
+        if test_type == 'val':
+            loader = self.val_dataloader
+        else:
+            loader = self.test_dataloader
         # get meters ready
         loss_meter = utils.AverageMeter()
         acc_meter = utils.AverageMeter()

@@ -1,11 +1,10 @@
 import os
-from PIL import Image
 import numpy as np
 import torch
-from torch.utils.data import Dataset, Subset
-from .looping import LoopingDataset
+from torch.utils.data import Dataset
 from .vision import VisionDataset
-import torchvision.transforms as T
+
+DATA_ROOT = '/atlas/u/kechoi/f-dre/data/datasets/omniglot/'
 
 
 def logit_transform(image, lam=1e-6):
@@ -15,7 +14,10 @@ def logit_transform(image, lam=1e-6):
 
 class OmniglotMixture(VisionDataset):
     """
-    Dataset class exclusively for training the DRE classifier (will need a different dataset class for actual downstream classification)
+    Dataset class exclusively for training the DRE classifier
+    (will need a different dataset class for actual downstream classification)
+
+    NOTE: assumes that DAGAN has already been used to generate samples!
     """
     def __init__(self, root, 
                  config,
@@ -30,32 +32,26 @@ class OmniglotMixture(VisionDataset):
         self.root = root
         self.perc = config.data.perc
         self.flow = True if config.model.name == 'maf' else False
-        # print('Instantiating x-space {} dataset with perc={}'.format(
-            # self.split, self.perc))
 
-        # paths to real/synthetic data
-        ref_data = np.load('/atlas/u/kechoi/DAGAN/datasets/omniglot_data.npy')
-        # tensorflow samples
-        bias_data = np.load('/atlas/u/kechoi/DAGAN/datasets/generated_omniglot/generated_omniglot.npy').reshape(1622, 100, 28, 28, 1)
-        # bias_data = bias_data[0:1200, :, :, :, :]
-        # TODO: commented this out so that I'm augmenting across all classes
+        # paths to real omniglot data
+        ref_data = np.load(os.path.join(DATA_ROOT, 'omniglot_data.npy'))
+        ref_data = ref_data[:1200, :, :, :, :]
+        # path to samples generated
+        bias_data = np.load(os.path.join(DATA_ROOT, 'generated_omniglot.npy')).reshape(1200, 100, 28, 28, 1)
         bias_data = bias_data / 255.
-        # TODO: will have to experiment with train/val/test splits
-        # TODO: maybe a "perc" argument can be used here
 
         self.ref_dataset, self.bias_dataset = self.initialize_data_splits(ref_data, bias_data)
 
     def initialize_data_splits(self, ref_data, bias_data):
         if self.split == 'train':
-            ref = ref_data[:, 0:15, :, :, :]
-            bias = bias_data[:, 0:15, :, :, :]
-            # bias = bias_data[:, 0:5, :, :, :]
+            ref = ref_data[:, 0:10, :, :, :]
+            bias = bias_data[:, 0:50, :, :, :]
         elif self.split == 'val':
-            ref = ref_data[:, 15:18, :, :, :]
-            bias = bias_data[:, 15:18, :, :, :]
+            ref = ref_data[:, 10:15, :, :, :]
+            bias = bias_data[:, 50:55, :, :, :]
         else:
-            ref = ref_data[:, 18:, :, :, :]
-            bias = bias_data[:, 18:, :, :, :]
+            ref = ref_data[:, 15:, :, :, :]
+            bias = bias_data[:, 55:60, :, :, :]
 
         # reshape bc numpy 
         bias = bias.reshape(-1, 28, 28, 1)
@@ -67,7 +63,6 @@ class OmniglotMixture(VisionDataset):
 
         if self.flow:
             print('applying flow transforms in advance...')
-            # apply the data transformations in advance :p
             bias = self._data_transform(bias)
             ref = self._data_transform(ref)
 
@@ -86,14 +81,16 @@ class OmniglotMixture(VisionDataset):
         """
         Make sure dataset doesn't go out of bounds
         """
-        ref_item, _ = self.ref_dataset[index]
         bias_item, _ = self.bias_dataset[index]
+        if index >= len(self.ref_dataset):
+            index = np.random.choice(len(self.ref_dataset))
+        ref_item, _ = self.ref_dataset[index]
 
         return ref_item, bias_item
 
     def __len__(self):
         # iterate through both at the same time
-        return len(self.ref_dataset)
+        return len(self.bias_dataset)
 
     def _data_transform(self, x):
         # data is originally between [0,1], so change it back
@@ -124,34 +121,43 @@ class Omniglot(VisionDataset):
             print('augmenting real data with synthetic data...')
 
         if not self.synthetic:
-            true_data = np.load('/atlas/u/kechoi/DAGAN/datasets/omniglot_data.npy')
+            true_data = np.load(os.path.join(DATA_ROOT, 'omniglot_data.npy'))
             true_data = true_data[0:1200, :, :, :, :]
             data = true_data
         else:
             # tensorflow shenanigans
             print('loading synthetic data for training...')
-            data = np.load('/atlas/u/kechoi/DAGAN/datasets/generated_omniglot/generated_omniglot.npy').reshape(1622, 100, 28, 28, 1)
+            data = np.load(os.path.join(DATA_ROOT,
+                                        'generated_omniglot.npy')).reshape(1200, 100, 28, 28, 1)
             data = data[0:1200, :, :, :, :]
             data = data / 255.
-            true_data = np.load('/atlas/u/kechoi/DAGAN/datasets/omniglot_data.npy')[0:1200, :, :, :, :]
+            true_data = np.load(os.path.join(DATA_ROOT, 'omniglot_data.npy'))[0:1200, :, :, :, :]
         if self.split == 'train':
-            # data = data[:, 0:15, :, :, :]
-            data = data[:, 0:5, :, :, :]
-            n_labels = 5
+            if self.synthetic:
+                data = data[:, 0:50, :, :, :]
+                n_labels = 50
+            else:
+                data = data[:, 0:10, :, :, :]
+                n_labels = 10
+            aux_labels = np.ones(1200*n_labels)  # fake is y=1
             if self.augment:
-                real = true_data[:, 0:15, :, :, :]
+                real = true_data[:, 0:10, :, :, :]
                 data = np.hstack([data, real])
-                n_labels = 20
+                n_labels += 10
+                aux_labels = np.hstack([aux_labels, np.zeros(1200*10)])  # real is y = 0
             labels = np.repeat(np.arange(len(data)), n_labels)
         elif self.split == 'val':
-            data = true_data[:, 15:18, :, :, :]
-            labels = np.repeat(np.arange(len(data)), 3)
+            data = true_data[:, 10:15, :, :, :]
+            labels = np.repeat(np.arange(len(data)), 5)
+            aux_labels = np.zeros(1200*5)
         else:
-            data = true_data[:, 18:, :, :, :]
-            labels = np.repeat(np.arange(len(data)), 2)
+            data = true_data[:, 15:, :, :, :]
+            labels = np.repeat(np.arange(len(data)), 5)
+            aux_labels = np.zeros(1200*5)
         data = data.reshape(-1, 28, 28, 1)
+        labels = np.vstack([labels, aux_labels])
         self.dataset = torch.from_numpy(data).permute((0, 3, 1, 2)).float()
-        self.labels = torch.from_numpy(labels).float()
+        self.labels = torch.from_numpy(labels).float().permute(1,0)  # (2, n_data)
 
     def __getitem__(self, index):
         """

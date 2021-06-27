@@ -235,7 +235,7 @@ class MIClassifier(BaseTrainer):
         for epoch in range(1, self.config.training.n_epochs+1):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
-            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test(self.val_dataloader, 'val')
+            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test('val')
             est_mi = self.estimate_mi()
             print('Estimated MI: {} (true MI: {})'.format(est_mi, true_mi))
             scheduler.step()
@@ -260,7 +260,7 @@ class MIClassifier(BaseTrainer):
             test_acc_db[epoch - 1] = val_acc
             est_mi_db[epoch-1] = est_mi
         # evaluate on test
-        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
+        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test('test')
         
         # TODO: save metrics
         self.plot_train_test_curves(tr_loss_db, test_loss_db)
@@ -274,7 +274,11 @@ class MIClassifier(BaseTrainer):
         np.save(os.path.join(self.output_dir, 'val_acc.npy'), test_acc_db)
         np.save(os.path.join(self.output_dir, 'est_mi.npy'), est_mi_db)
 
-    def test(self, loader, test_type):
+    def test(self, test_type):
+        if test_type == 'val':
+            loader = self.val_dataloader
+        else:
+            loader = self.test_dataloader
         # get meters ready
         loss_meter = utils.AverageMeter()
         summary = {'avg_loss': 0, 'avg_acc': 0}

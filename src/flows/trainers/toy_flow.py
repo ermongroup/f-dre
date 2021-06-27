@@ -6,10 +6,10 @@ import copy
 import logging
 from pprint import pprint
 from tqdm import tqdm
+import math
 import numpy as np
 import yaml
 
-import flows.utils as utils
 from datasets.data import fetch_dataloaders
 from flows.models.maf import *
 from flows.models.ema import EMAHelper
@@ -17,12 +17,6 @@ from classification.models.resnet import ResnetClassifier
 from classification.models.mlp import MLPClassifier
 
 from flows.functions import get_optimizer
-from flows.functions.ckpt_util import get_ckpt_path
-from flows.functions.utils import (
-    get_ratio_estimates,
-    fairness_discrepancy,
-    classify_examples
-)
 
 import torch
 import torch.optim as optim
@@ -373,12 +367,16 @@ class ToyFlow(object):
         train_biased, train_ref = train_dataloader
         val_biased, val_ref = val_dataloader
         test_biased, test_ref = test_dataloader
+        # HACK for GMM and MI encodings
+        if dataset == 'GMM_flow':
+            dataset = 'GMM'
+        if dataset == 'MI_flow':
+            dataset = 'MI'
         save_folder = os.path.join(self.config.training.data_dir, 'encodings', dataset)
         os.makedirs(save_folder, exist_ok=True)
         print(f'encoding dataset {dataset}')
 
         for split, loader in zip(('train', 'val', 'test'), (train_biased, val_biased, test_biased)):
-            # data_type = 'mnist' if not self.config.data.subset else 'mnist_subset_same_bkgd'
             save_path = os.path.join(save_folder, f'{model_name}_{split}_biased_z_perc{self.config.data.perc}')
             print('saving encodings in: {}'.format(save_path))
             

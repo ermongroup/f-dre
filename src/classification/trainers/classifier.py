@@ -14,10 +14,8 @@ from classification.models.mlp import (
     MLPClassifierv2
 )
 from classification.models.flow_mlp import FlowClassifier
-from classification.models.resnet import ResnetClassifier
 from classification.models.networks import *
 from classification.models.cnn import *
-# from classification.models.glow import Glow
 from flows.models.maf import MAF
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
@@ -72,11 +70,6 @@ class Classifier(BaseTrainer):
     def get_model_cls(self, name):
         if name == 'mlp':
             model_cls = MLPClassifierv2
-        elif name == 'resnet':
-            model_cls = ResnetClassifier
-        elif name == 'resnet20':
-            model_cls = resnet20()
-            return model_cls
         elif name == 'cnn':
             model_cls = CNNClassifier()
             return model_cls
@@ -101,7 +94,9 @@ class Classifier(BaseTrainer):
                     'relu', 
                     'sequential', 
                     batch_norm=True)
-        restore_file = 'flows/results/omniglot_maf/'
+        # TODO: it was 50aug_v2 before, but i changed it back to 100aug
+        # restore_file = 'flows/results/omniglot_maf_50aug_v2/'
+        restore_file = 'flows/results/omniglot_maf_100aug/'
         state = torch.load(os.path.join(restore_file, "best_model_checkpoint.pt"), map_location='cuda')
         model.load_state_dict(state['model_state'])
         model = model.to(self.config.device)
@@ -265,14 +260,14 @@ class Classifier(BaseTrainer):
         for epoch in range(1, self.config.training.n_epochs+1):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
-            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test(self.val_dataloader, 'val')
+            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test('val')
             
             # evaluate on test (i just added this in)
-            test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
+            # test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
             scheduler.step()
             
             # check performance on validation set
-            if val_loss < best_loss:
+            if val_loss <= best_loss:
             # if val_acc > best_acc:
                 print('saving best model..')
                 best_acc = val_acc
@@ -292,7 +287,7 @@ class Classifier(BaseTrainer):
             tr_acc_db[epoch - 1] = tr_acc
             test_acc_db[epoch - 1] = val_acc
         # evaluate on test
-        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
+        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test('test')
         
         # TODO: save metrics
         self.plot_train_test_curves(tr_loss_db, test_loss_db)
@@ -304,7 +299,11 @@ class Classifier(BaseTrainer):
         np.save(os.path.join(self.output_dir, 'tr_acc.npy'), tr_acc_db)
         np.save(os.path.join(self.output_dir, 'val_acc.npy'), test_acc_db)
 
-    def test(self, loader, test_type):
+    def test(self, test_type):
+        if test_type == 'val':
+            loader = self.val_dataloader
+        else:
+            loader = self.test_dataloader
         # get meters ready
         loss_meter = utils.AverageMeter()
         summary = {'avg_loss': 0, 'avg_acc': 0}

@@ -2,8 +2,6 @@ import os
 import sys
 # for module imports:
 sys.path.append(os.path.abspath(os.getcwd()))
-import copy
-import logging
 from pprint import pprint
 from tqdm import tqdm
 import numpy as np
@@ -25,9 +23,6 @@ import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 
-import torchvision
-from torchvision import datasets, transforms
-import torch.utils.data as data_utils
 
 import matplotlib
 matplotlib.use('Agg')
@@ -46,25 +41,34 @@ class OmniglotDownstreamClassifier(BaseTrainer):
         self.model = self.get_model().to(self.device)
         self.optimizer = self.get_optimizer(self.model.parameters())
         self.loss = self.get_loss()
+        self.alpha = self.args.alpha
+        self.sn = self.args.sn
 
         # get data
-        self.train_dataloader, self.val_dataloader, self.test_dataloader = fetch_dataloaders(config.data.dataset, config.training.batch_size, self.device, args, config)
+        self.train_dataloader, self.val_dataloader, self.test_dataloader = fetch_dataloaders(config.data.dataset, self.args.batch_size, self.device, args, config)
 
         # saving
         self.output_dir = args.out_dir
         self.checkpoint_dir = os.path.join(self.output_dir, 'checkpoints')
         os.makedirs(self.checkpoint_dir, exist_ok=True)
 
-        # HACK FOR CIFAR10
         if not self.config.model.baseline:
             if self.config.data.x_space:
                 print('using x-space classifier')
-                self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/omniglot_x_dre_clf/checkpoints/model_best.pth')
+                ckpt_path = '/atlas/u/kechoi/f-dre/src/classification/results/omniglot_x_dre_clf/checkpoints/model_best.pth'
+                print('loading {}'.format(ckpt_path))
+                self.dre_clf = self.load_classifier(ckpt_path)
             else:
                 print('using z-space classifier')
                 # z-encoding
                 self.flow = self.load_flow()
-                self.dre_clf = self.load_classifier('/atlas/u/kechoi/multi-fairgen/src/classification/results/omniglot_z_dre_clf/checkpoints/model_best.pth')
+                self.dre_clf = self.load_classifier('/atlas/u/kechoi/f-dre/src/classification/results/omniglot_z_dre_clf/checkpoints/model_best.pth')
+
+    def restore_checkpoint(self):
+        clf_path = os.path.join('/atlas/u/kechoi/f-dre/src/classification/results/', self.args.exp_id, 'checkpoints', 'model_best.pth')
+        print('loading clf from {}'.format(clf_path))
+        state = torch.load(clf_path)
+        self.model.load_state_dict(state['state_dict'])
 
     def get_model(self):
         model = self.get_model_cls(self.config.model.name)
@@ -77,7 +81,6 @@ class OmniglotDownstreamClassifier(BaseTrainer):
             model_cls = MLPClassifier
         elif name == 'resnet':
             model_cls = ResnetClassifier
-            # model_cls = Resnet_v2
         elif name == 'resnet20':
             model_cls = resnet20()
             return model_cls
@@ -120,7 +123,9 @@ class OmniglotDownstreamClassifier(BaseTrainer):
                     'relu', 
                     'sequential', 
                     batch_norm=True)
-        restore_file = 'flows/results/omniglot_maf/'
+        # restore_file = 'flows/results/omniglot_maf/'
+        # TODO
+        restore_file = 'flows/results/omniglot_maf_100aug'
         state = torch.load(os.path.join(restore_file, "best_model_checkpoint.pt"), map_location='cuda')
         model.load_state_dict(state['model_state'])
         model = model.to(self.config.device)
@@ -187,7 +192,7 @@ class OmniglotDownstreamClassifier(BaseTrainer):
             
             # NOTE: here, biased (y=0) and reference (y=1)
             logits, _ = self.model(x)
-            loss = self.loss(logits.squeeze(), y.long(), reduction='none')
+            loss = self.loss(logits.squeeze(), y.long()[:,0], reduction='none')
 
             if not self.config.model.baseline:
                 # TODO: REWEIGHT THE LOSS
@@ -196,20 +201,28 @@ class OmniglotDownstreamClassifier(BaseTrainer):
                 dre_logits, dre_probas = self.dre_clf(z.view(len(z), 1, 28, 28))
                 log_r = utils.logsumexp_1p(-dre_logits) - utils.logsumexp_1p(dre_logits)
                 ratios = torch.exp(log_r)
-                # reweight density ratios to account for flow
-                # if not self.config.data.x_space:
-                #     ratios = ratios/(0.6 * ratios + 0.4)
+                fake = torch.where(y[:, 1] == 1)[0]
+                real = torch.where(y[:, 1] == 0)[0]
+                ratios = ratios[fake]
 
                 # what if we self-normalize?
-                ratios = ratios/sum(ratios)
-                loss = (ratios * loss).sum()
-                # loss = (ratios * loss).mean()
+                ratios = (ratios)**self.alpha
+                if self.sn:
+                    ratios = ratios/sum(ratios)
+                if len(real) > 0:
+                    real_loss = loss[real].mean()
+                else:
+                    real_loss = 0.
+                if self.sn:
+                    loss = (ratios * loss[fake]).sum() + real_loss
+                else:
+                    loss = (ratios * loss[fake]).mean() + real_loss
             else:
                 loss = loss.mean()
             loss_meter.update(loss.item())
 
             # check accuracy
-            accs = self.accuracy(logits.squeeze(), y.squeeze())
+            accs = self.accuracy(logits.squeeze(), y.squeeze()[:, 0])
             acc_meter.update(accs)
 
             # gradient update
@@ -270,17 +283,16 @@ class OmniglotDownstreamClassifier(BaseTrainer):
             val_loss, val_acc, val_labels, val_probs, val_ratios = self.test(self.val_dataloader, 'val')
             # evaluate on test
             test_loss, test_acc, test_labels, test_probs, test_ratios = self.test(self.test_dataloader, 'test')
-            scheduler.step()
+            # scheduler.step()
             
             # check performance on validation set
-            if val_acc >= best_acc:
+            if val_acc > best_acc:
             # if val_loss < best_loss:
                 best_loss = val_loss
                 best_acc = val_acc
                 best_epoch = epoch
                 best = True
                 best_test_acc = test_acc
-                # self.clf_diagnostics(val_labels, val_probs, val_ratios, split='val')
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)
@@ -324,49 +336,24 @@ class OmniglotDownstreamClassifier(BaseTrainer):
                 x = x.to(self.device).float()
                 y = y.to(self.device).float()
 
-                # TODO: probs do something about this
-                # if self.args.encode_z:
-                #     self.flow.eval()
-                #     x_hat = utils.glow_preprocess(x)
-                #     z, _, _ = self.flow(x_hat)
-                # else:
-                #     # no encoding
-                #     z = x
-                # # get density ratios
-                # if not self.config.data.x_space:
-                #     z = z.view(len(z), -1)
-                #     logits, probas = self.dre_clf(z)
-                #     log_r = utils.logsumexp_1p(-logits) - utils.logsumexp_1p(logits)
-                #     ratios = torch.exp(log_r)
-
                 if self.config.model.name =='mlp':
                     x = x.view(len(x), -1)
                 else:
                     x = x.view(len(x), self.config.data.channels, self.config.data.image_size, self.config.data.image_size)
                 logits, probs = self.model(x)
-                loss = self.loss(logits.squeeze(), y.long(), reduction='none')
-
-                if not self.config.model.baseline:
-                    # do you need the reweighted loss here?
-                    if not self.config.data.x_space:
-                        # TODO: fix for z-space
-                        # ratios = ratios
-                        ratios = None
-                    # loss = (ratios * loss).mean()
-                    loss = loss.mean()
-                else:
-                    loss = loss.mean()
+                loss = self.loss(logits.squeeze(), y.long()[:,0], reduction='none')
+                loss = loss.mean()
 
                 # accuracy
                 num_examples += y.size(0)
                 loss_meter.update(loss.item())
                 
                 # TODO: check accuracy between classes
-                accs = self.accuracy(logits.squeeze(), y.squeeze())
+                accs = self.accuracy(logits.squeeze(), y.squeeze()[:,0])
                 acc_meter.update(accs)
 
                 # save items
-                labels.append(y.cpu())
+                labels.append(y.cpu()[:,0])
                 p_y1.append(probs)
         
         # Completed running test

@@ -5,9 +5,6 @@ import os
 import sys
 sys.path.append('../')
 import torch
-from abc import abstractmethod
-from numpy import inf
-# from logger import *
 
 
 class BaseTrainer:
@@ -32,9 +29,6 @@ class BaseTrainer:
         self.n_epochs = cfg_trainer['epochs']
         self.iter_save = cfg_trainer['iter_save']
         self.checkpoint_dir = config['ckpt_dir']
-
-        # setup visualization writer instance                
-        self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
 
         if config.resume is not None:
             self._resume_checkpoint(config.resume)

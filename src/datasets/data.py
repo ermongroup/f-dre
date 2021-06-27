@@ -7,11 +7,6 @@ import torchvision.transforms as T
 from torch.utils.data import DataLoader, TensorDataset
 
 import datasets
-from .cmnist import (
-    ourMNIST,
-    MNISTSubset,
-    SplitEncodedMNIST
-)
 from .toy import (
     Gaussian, 
     GaussianMixtures, 
@@ -21,13 +16,6 @@ from .mi_gaussians import (
     GaussiansForMI,
     MIGaussians,
     EncodedMIGaussians
-)
-from .cifar10 import (
-    ZCIFAR10, 
-    SplitCIFAR10,
-    AttrCIFAR10,
-    DASplitCIFAR10,
-    DADRESplitCIFAR10
 )
 from .omniglot import (
     Omniglot,
@@ -375,6 +363,60 @@ def fetch_dataloaders(dataset_name, batch_size, device, args, config, flip_toy_v
         train_dataset = Omniglot(config.training.data_dir, config, split='train', transform=train_transform, synthetic=config.data.synthetic)
         val_dataset = Omniglot(config.training.data_dir, config, split='val', transform=train_transform, synthetic=config.data.synthetic)
         test_dataset = Omniglot(config.training.data_dir, config, split='test', transform=test_transform, synthetic=config.data.synthetic)
+
+    elif dataset_name == 'AttrCelebA':
+        input_dims = config.data.input_size
+        label_size = 1
+        lam = 1e-6
+
+        print('using x-space for density ratio estimation...')
+        # NOTE: this transform isn't actually gonna be used
+        train_transform = test_transform = T.Compose([
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        # train_dataset = AttrCelebA(config.training.data_dir, config, split='train', transform=train_transform)
+        # val_dataset = AttrCelebA(config.training.data_dir, config, split='valid', transform=train_transform)
+        # test_dataset = AttrCelebA(config.training.data_dir, config, split='test', transform=test_transform)
+        train_dataset = HatCelebA(config.training.data_dir, config, split='train', transform=train_transform)
+        val_dataset = HatCelebA(config.training.data_dir, config, split='valid', transform=train_transform)
+        test_dataset = HatCelebA(config.training.data_dir, config, split='test', transform=test_transform)
+
+    elif dataset_name == 'AttrDRECelebA':
+        input_dims = config.data.input_size
+        label_size = 1
+        lam = 1e-6
+
+        print('using x-space for density ratio estimation...')
+        # NOTE: this transform isn't actually gonna be used
+        train_transform = test_transform = T.Compose([
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        if config.data.x_space:
+            train_dataset = HatDRECelebA(config.training.data_dir, config, split='train', transform=train_transform)
+            val_dataset = HatDRECelebA(config.training.data_dir, config, split='valid', transform=train_transform)
+            test_dataset = HatDRECelebA(config.training.data_dir, config, split='test', transform=test_transform)
+        else:
+            raise NotImplementedError
+
+    elif dataset_name == "DASTLCIFAR":
+        input_dims = config.data.input_size
+        label_size = 9
+        lam = 1e-6
+
+        print('using x-space for density ratio estimation...')
+        # NOTE: do we want these transforms?
+        train_transform = test_transform = T.Compose([
+            T.RandomAffine(0, translate=(0.1, 0.1)),
+            T.RandomHorizontalFlip(),
+            T.Resize(config.data.image_size),
+            T.ToTensor()
+        ])
+        train_dataset = DASplitCIFAR(config.training.data_dir, config, split='train', transform=train_transform)
+        # val_dataset = DASplitCIFAR(config.training.data_dir, config, split='valid', transform=train_transform)
+        val_dataset = DASplitSTL10(config.training.data_dir, config, split='valid', transform=train_transform)
+        test_dataset = DASplitSTL10(config.training.data_dir, config, split='test', transform=test_transform)
 
     elif dataset_name in ['ZCIFAR10']:
         input_dims = config.data.input_size

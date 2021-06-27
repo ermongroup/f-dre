@@ -7,15 +7,12 @@ import sys
 import os
 import torch
 import numpy as np
-import torch.utils.tensorboard as tb
 sys.path.append(os.path.abspath(os.getcwd()))
 
 from flows.trainers.flow import Flow
 from flows.trainers.toy_flow import ToyFlow
 from classification.trainers.classifier import Classifier
-from classification.trainers.old_classifier import OldClassifier
 from classification.trainers.attr_classifier import AttrClassifier
-from classification.trainers.tre_trainer import TREClassifier
 from classification.trainers.mi_classifier import MIClassifier
 from classification.trainers.downstream_classifier import DownstreamClassifier
 from classification.trainers.omniglot_downstream_clf import OmniglotDownstreamClassifier
@@ -25,10 +22,10 @@ import wandb
 
 WANDB = {
     'kechoi': 'kristychoi',
-    'madeline': 'madeline'
 }
 
 torch.set_printoptions(sci_mode=False)
+
 
 def parse_args_and_config():
     parser = argparse.ArgumentParser(description=globals()['__doc__'])
@@ -63,6 +60,9 @@ def parse_args_and_config():
     parser.add_argument('--attr', default=None, help='For attr classification, provide one of \{\'background\', \'digit\'\}')
     parser.add_argument('--mi', action='store_true', help='To run MI estimation')
     parser.add_argument('--downstream', action='store_true', help='Run downstream classifier for domain adaptation experiment')
+    parser.add_argument('--sn', action='store_true', help='self-normalization')
+    parser.add_argument('--alpha', type=float, default=1.0, help='flattening coefficient')
+    parser.add_argument('--batch_size', type=int, default=100, help='batch size')
     
     # parse args and config
     args = parser.parse_args()
@@ -83,11 +83,11 @@ def parse_args_and_config():
     if not args.sample:
         # only for training
         wandb.init(
-            project='multi-fairgen', 
+            project='f-dre',
             entity=WANDB[getpass.getuser()], 
             name=args.exp_id, 
             config=new_config, 
-            sync_tensorboard=True,
+            sync_tensorboard=False,
         )
 
     # set up logger
@@ -177,13 +177,9 @@ def main():
 
     try:
         if args.classify:
-            if args.tre:
-                trainer = TREClassifier(args, config)
-                print('training TRE classifier...')
-            elif args.attr is not None or args.dre_x:
+            if args.attr is not None or args.dre_x:
                 trainer = AttrClassifier(args, config)
                 print('training attribute/standard (non-dre) classifier...')
-
             else:
                 if args.mi:
                     print('training MI classifier...')
@@ -198,7 +194,6 @@ def main():
                 else:
                     print('Using DRE classifier...')
                     trainer = Classifier(args, config)
-                    # trainer = OldClassifier(args, config)
         else:
             if config.data.dataset not in ['KMM', 'GMM', 'GMM_flow', 'MI', 'MI_flow']:
                 trainer = Flow(args, config)
@@ -209,13 +204,15 @@ def main():
         if args.sample:
             trainer.sample(args)
         elif args.test:
-            trainer.test()
+            # load checkpoint
+            trainer.restore_checkpoint()
+            trainer.test(trainer.test_dataloader, 'test')
         else:
             trainer.train()
             if args.classify and not args.tre and config.data.dataset != 'Omniglot':
                 # test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
                 # trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
-                test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
+                test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test('test')
                 trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
     
     except Exception:

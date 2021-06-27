@@ -84,7 +84,7 @@ class BasicBlock_v2(nn.Module):
 
 
 class ResNet_v2(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=1):
+    def __init__(self, block, num_blocks, num_classes=9):
         super(ResNet_v2, self).__init__()
         self.in_planes = 16
 
@@ -114,8 +114,8 @@ class ResNet_v2(nn.Module):
         out = F.avg_pool2d(out, out.size()[3])
         out = out.view(out.size(0), -1)
         logits = self.linear(out)
-        # probas = F.softmax(logits, dim=1)
-        probas = torch.sigmoid(logits)
+        probas = F.softmax(logits, dim=1)
+        # probas = torch.sigmoid(logits)
         return logits, probas
 
 
