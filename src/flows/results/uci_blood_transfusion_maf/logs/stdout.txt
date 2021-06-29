@@ -1,0 +1,3 @@
+INFO - main.py - 2021-04-20 10:40:10,156 - Saving output to /atlas/u/madeline/multi-fairgen/src/flows/results/biased_0.1_0.9_4-19-21_trial0
+INFO - main.py - 2021-04-20 10:40:10,156 - Writing log file to /atlas/u/madeline/multi-fairgen/src/flows/results/biased_0.1_0.9_4-19-21_trial0/logs
+INFO - main.py - 2021-04-20 10:40:10,156 - Exp instance id = 3936251

@@ -1,0 +1,3 @@
+INFO - main.py - 2021-02-14 14:13:06,842 - Saving output to /atlas/u/madeline/multi-fairgen/src/flows/results/kmm_synthetic_maf_trial_1
+INFO - main.py - 2021-02-14 14:13:06,843 - Writing log file to /atlas/u/madeline/multi-fairgen/src/flows/results/kmm_synthetic_maf_trial_1/logs
+INFO - main.py - 2021-02-14 14:13:06,843 - Exp instance id = 1256886

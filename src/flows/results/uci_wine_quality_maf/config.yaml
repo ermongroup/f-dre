@@ -1,0 +1,42 @@
+data:
+  dataset: UCI_trials
+  flip_toy_var_order: true
+  input_size: 11
+  num_workers: 4
+  perc: 1.0
+dre:
+  alpha: 0.06
+loss:
+  name: cross_entropy
+model:
+  activation_fn: relu
+  cond_label_size: 1
+  conditional: false
+  dropout: 0.1
+  ema: false
+  hidden_size: 100
+  input_order: sequential
+  input_size: 11
+  n_blocks: 5
+  n_classes: 2
+  n_components: 1
+  n_hidden: 1
+  name: maf
+  no_batch_norm: false
+optim:
+  amsgrad: false
+  beta1: 0.9
+  eps: 1.0e-08
+  lr: 0.0001
+  optimizer: Adam
+  weight_decay: 1.0e-06
+sampling:
+  n_samples: 50000
+training:
+  batch_size: 100
+  data_dir: /atlas/u/madeline/multi-fairgen/data/
+  iter_save: 100
+  log_interval: 500
+  n_epochs: 100
+  ngpu: 1
+  out_dir: /atlas/u/madeline/multi-fairgen/src/flows/results
