@@ -207,10 +207,12 @@ def main():
         else:
             trainer.train()
             if args.classify and not args.tre and config.data.dataset != 'Omniglot':
-                # test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
-                # trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
-                test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test('test')
-                trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
+                if args.attr is not None:
+                    test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test(trainer.test_dataloader, 'test')
+                    trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
+                else:
+                    test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = trainer.test('test')
+                    trainer.clf_diagnostics(test_labels, test_probs, test_ratios, test_data, 'test')
     
     except Exception:
         logging.error(traceback.format_exc())

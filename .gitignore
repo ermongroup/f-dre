@@ -1,1 +1,3 @@
 wandb/
+data/encodings
+data/mnist

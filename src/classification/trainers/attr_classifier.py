@@ -12,6 +12,7 @@ from datasets.data import fetch_dataloaders
 
 import classification.utils as utils
 from classification.models.mlp import MLPClassifier, MLPClassifierv2
+from classification.models.resnet import ResnetClassifier
 from classification.models.networks import *
 from classification.trainers.base import BaseTrainer
 from sklearn.calibration import calibration_curve
@@ -59,6 +60,11 @@ class AttrClassifier(BaseTrainer):
     def get_model_cls(self, name):
         if name == 'mlp':
             model_cls = MLPClassifierv2
+        elif name == 'resnet':
+            model_cls = ResnetClassifier
+            # model_cls = Resnet_v2
+        elif name == 'resnet20':
+            model_cls = resnet20()
             return model_cls
         else:
             print('Model {} not found!'.format(name))
@@ -179,7 +185,6 @@ class AttrClassifier(BaseTrainer):
     def train(self):
         best = False
         best_loss = sys.maxsize
-        best_test_acc = 0
         best_acc = -sys.maxsize
         best_epoch = 1
         tr_loss_db = np.zeros(self.config.training.n_epochs)
@@ -199,20 +204,17 @@ class AttrClassifier(BaseTrainer):
         for epoch in range(1, self.config.training.n_epochs+1):
             print('training epoch {}'.format(epoch))
             tr_loss, tr_acc = self.train_epoch(epoch)
-            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test('val')
-            # check on test 
-            test_loss, test_acc, test_labels, test_probs, test_ratios, _ = self.test('test')
+            val_loss, val_acc, val_labels, val_probs, val_ratios, val_data = self.test(self.val_dataloader, 'val')
             scheduler.step()
             
             # check performance on validation set
-            # if val_acc > best_acc:
+            # if val_acc >= best_acc:
             if val_loss < best_loss:
                 best_loss = val_loss
                 best_acc = val_acc
                 best_epoch = epoch
                 best = True
-                best_test_acc = test_acc
-                # self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
+                self.clf_diagnostics(val_labels, val_probs, val_ratios, val_data, split='val')
             else:
                 best = False
             self._save_checkpoint(epoch, save_best=best)
@@ -223,23 +225,19 @@ class AttrClassifier(BaseTrainer):
             tr_acc_db[epoch - 1] = tr_acc
             test_acc_db[epoch - 1] = val_acc
         # evaluate on test
-        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test('test')
+        test_loss, test_acc, test_labels, test_probs, test_ratios, test_data = self.test(self.test_dataloader, 'test')
         
         # TODO: save metrics
         self.plot_train_test_curves(tr_loss_db, test_loss_db)
         self.plot_train_test_curves(tr_acc_db, test_acc_db, metric='Accuracy', title='train_curve_acc')
-        print('Completed training! Best performance at epoch {}, loss: {}, acc: {}; best test acc is: {}'.format(best_epoch, best_loss, best_acc, best_test_acc))
+        print('Completed training! Best performance at epoch {}, loss: {}, acc: {}'.format(best_epoch, best_loss, best_acc))
         # TODO: also save test metrics
         np.save(os.path.join(self.output_dir, 'tr_loss.npy'), tr_loss_db)
         np.save(os.path.join(self.output_dir, 'val_loss.npy'), test_loss_db)
         np.save(os.path.join(self.output_dir, 'tr_acc.npy'), tr_acc_db)
         np.save(os.path.join(self.output_dir, 'val_acc.npy'), test_acc_db)
 
-    def test(self, test_type):
-        if test_type == 'val':
-            loader = self.val_dataloader
-        else:
-            loader = self.test_dataloader
+    def test(self, loader, test_type):
         # get meters ready
         loss_meter = utils.AverageMeter()
         acc_meter = utils.AverageMeter()
@@ -313,8 +311,8 @@ class AttrClassifier(BaseTrainer):
             function to check (1) classifier calibration; and (2) save weights
             """
             # assess calibration
-            # if self.config.model.name != 'mlp':
-            #     valid_prob_pos = valid_prob_pos[:, 1]
+            if self.config.model.name != 'mlp':
+                valid_prob_pos = valid_prob_pos[:, 1]
             fraction_of_positives, mean_predicted_value = calibration_curve(y_valid, valid_prob_pos)
 
             # save calibration results
