@@ -7,6 +7,11 @@ import torchvision.transforms as T
 from torch.utils.data import DataLoader, TensorDataset
 
 import datasets
+from .cmnist import (
+    ourMNIST,
+    MNISTSubset,
+    SplitEncodedMNIST
+)
 from .toy import (
     Gaussian, 
     GaussianMixtures, 

@@ -304,8 +304,9 @@ class Flow(object):
         samples = samples.view((samples.shape[0], self.config.data.channels, self.config.data.image_size, self.config.data.image_size))
         samples = torch.sigmoid(samples)
         samples = torch.clamp(samples, 0., 1.)
-        filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
-        save_image(samples, os.path.join(args.out_dir, filename), nrow=n_row, normalize=True)
+        if step % args.save_freq  == 0:
+            filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
+            save_image(samples, os.path.join(args.out_dir, filename), nrow=n_row, normalize=True)
         # log generations to wandb
         wandb.log({"samples" : [wandb.Image(i) for i in samples[0:40]]})
 

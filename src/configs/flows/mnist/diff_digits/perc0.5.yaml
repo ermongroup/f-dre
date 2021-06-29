@@ -1,0 +1,56 @@
+training:
+  batch_size: 100
+  n_epochs: 200
+  ngpu: 1
+  log_interval: 100
+  iter_save: 100
+  out_dir: "flows/results"
+  data_dir: "../data/"
+
+data:
+  dataset: "DigitMNISTSubset"
+  perc: 0.5
+  biased_digits: [0, 7]
+  biased_digit_percs: [0.5, 0.5]
+  ref_digits: [1, 2]
+  ref_digit_percs: [0.5, 0.5]
+  image_size: 28
+  channels: 1
+  random_flip: false
+  num_workers: 4
+  flip_toy_var_order: true
+
+dre:
+  alpha: 0
+
+sampling:
+  n_samples: 1000
+  n_sir: 1000
+  # sir: 1000
+
+model:
+  name: "maf"
+  dropout: 0.1
+  n_classes: 2
+  n_blocks: 5
+  n_components: 1
+  input_size: 784
+  hidden_size: 1024
+  n_hidden: 1
+  activation_fn: 'relu'
+  input_order: 'sequential'
+  conditional: false
+  no_batch_norm: false
+  cond_label_size: 10
+  ema: false
+
+optim:
+  weight_decay: 0.000001
+  optimizer: "Adam"
+  lr: 0.0001
+  beta1: 0.9
+  amsgrad: false
+  eps: 0.00000001
+
+loss:
+  name: "cross_entropy"

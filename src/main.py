@@ -32,6 +32,7 @@ def parse_args_and_config():
     parser.add_argument('--ni', action='store_true', help='No interaction. Suitable for Slurm Job launcher',)
     parser.add_argument('--seed', type=int, default=1234, help='Random seed')
     parser.add_argument('--verbose', type=str, default='info', help='Verbose level: info | debug | warning | critical',)
+    parser.add_argument('--save_freq', type=int, default=50, help='How often to save generated samples')
 
     # ======== Flow model task ========
     parser.add_argument('--resume_training', action='store_true', help='Whether to resume training')

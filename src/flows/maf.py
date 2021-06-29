@@ -192,8 +192,11 @@ def generate(model, dataset_lam, args, step=None, n_row=10):
     # samples = (torch.sigmoid(samples) - dataset_lam) / (1 - 2 * dataset_lam)
     samples = torch.sigmoid(samples)
     samples = torch.clamp(samples, 0., 1.)
-    filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
-    save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
+    print('args.save_freq: ', args.save_freq)
+    print('step: ', step)
+    if step % args.save_freq == 0:
+        filename = 'generated_samples' + (step != None)*'_epoch_{}'.format(step) + '.png'
+        save_image(samples, os.path.join(args.output_dir, filename), nrow=n_row, normalize=True)
 
 
 def dict2namespace(config):
