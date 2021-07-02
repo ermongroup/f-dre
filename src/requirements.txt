@@ -1,0 +1,16 @@
+tqdm==4.49.0
+scipy==1.4.1
+seaborn==0.8.1
+torchvision==0.8.2
+matplotlib==3.3.2
+numpy==1.18.1
+opencv_python==3.4.1.15
+requests==2.20.0
+torch==1.7.1
+docopt==0.6.2
+six==1.15.0
+dsets==0.0.1
+Pillow==8.3.0
+PyYAML==5.4.1
+scikit_learn==0.24.2
+tensorboardX==2.4
