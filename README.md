@@ -8,7 +8,7 @@ This repo contains a reference implementation for featurized density ratio estim
 
 ## For non-KMM/KLIEP experiments:
 ### 1) Environment setup:
-(a) Necessary packages can be found in `requirements.txt`. [TODO!]
+(a) Necessary packages can be found in `src/requirements.txt`.
 
 (b) Set the correct Python path using the following command:
 ```
