@@ -3,7 +3,7 @@ This repo contains a reference implementation for featurized density ratio estim
 > Featurized Density Ratio Estimation </br>
 > [Kristy Choi*](http://kristychoi.com/), [Madeline Liao*](https://www.linkedin.com/in/madelineliao/), [Stefano Ermon](https://cs.stanford.edu/~ermon/) </br>
 > Uncertainty in Artificial Intelligence (UAI), 2020. </br>
-> Paper: https://arxiv.org/abs/TODO </br>
+> Paper: https://arxiv.org/abs/2107.02212 </br>
 
 
 ## For non-KMM/KLIEP experiments:
@@ -67,5 +67,10 @@ Each of these experiments is self-contained within one Jupyter notebook. Simply 
 ## References
 If you find this work useful in your research, please consider citing the following paper:
 ```
-TODO
+@article{choi2021featurized,
+  title={Featurized Density Ratio Estimation},
+  author={Choi, Kristy and Liao, Madeline and Ermon, Stefano},
+  journal={arXiv preprint arXiv:2107.02212},
+  year={2021}
+}
 ```
